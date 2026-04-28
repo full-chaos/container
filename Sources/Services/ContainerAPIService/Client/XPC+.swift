@@ -134,6 +134,9 @@ public enum XPCKeys: String {
 
     /// Disk usage
     case diskUsageStats
+
+    case logSince
+    case logTimestamps
 }
 
 public enum XPCRoute: String {
