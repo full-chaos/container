@@ -43,18 +43,21 @@ public struct ContainerSnapshot: Codable, Sendable {
     /// Populated when the container transitions to ``RuntimeStatus/stopped``.
     /// `nil` if the container has never exited or its exit was not captured.
     public var lastExitCode: Int32?
+    public var health: HealthStatus?
 
     public init(
         configuration: ContainerConfiguration,
         status: RuntimeStatus,
         networks: [Attachment],
         startedDate: Date? = nil,
-        lastExitCode: Int32? = nil
+        lastExitCode: Int32? = nil,
+        health: HealthStatus? = nil
     ) {
         self.configuration = configuration
         self.status = status
         self.networks = networks
         self.startedDate = startedDate
         self.lastExitCode = lastExitCode
+        self.health = health
     }
 }
