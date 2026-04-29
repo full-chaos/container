@@ -14,17 +14,16 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-public struct ContainerCreateOptions: Codable, Sendable {
-    public let autoRemove: Bool
-    public let rootFsOverride: Filesystem?
-    public let restartPolicy: RestartPolicy?
+import Foundation
 
-    public init(autoRemove: Bool, rootFsOverride: Filesystem? = nil, restartPolicy: RestartPolicy? = nil) {
-        self.autoRemove = autoRemove
-        self.rootFsOverride = rootFsOverride
-        self.restartPolicy = restartPolicy
+public struct ContainerLogOptions: Sendable, Codable {
+    public let since: Date?
+    public let timestamps: Bool
+
+    public static let `default` = ContainerLogOptions(since: nil, timestamps: false)
+
+    public init(since: Date? = nil, timestamps: Bool = false) {
+        self.since = since
+        self.timestamps = timestamps
     }
-
-    public static let `default` = ContainerCreateOptions(autoRemove: false)
-
 }
