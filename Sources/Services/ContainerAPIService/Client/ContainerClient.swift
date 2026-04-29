@@ -262,11 +262,18 @@ public struct ContainerClient: Sendable {
         }
     }
 
-    /// Get the log file handles for a container.
     public func logs(id: String) async throws -> [FileHandle] {
+        try await logs(id: id, options: .default)
+    }
+
+    public func logs(id: String, options: ContainerLogOptions) async throws -> [FileHandle] {
         do {
             let request = XPCMessage(route: .containerLogs)
             request.set(key: .id, value: id)
+            if let since = options.since {
+                request.set(key: .logSince, value: since)
+            }
+            request.set(key: .logTimestamps, value: options.timestamps)
 
             let response = try await xpcClient.send(request)
             let fds = response.fileHandles(key: .logs)
@@ -345,6 +352,23 @@ public struct ContainerClient: Sendable {
             throw ContainerizationError(
                 .internalError,
                 message: "failed to export container",
+                cause: error
+            )
+        }
+    }
+
+    public func events() async throws -> [ContainerEvent] {
+        do {
+            let request = XPCMessage(route: .containerEvent)
+            let response = try await xpcClient.send(request)
+            guard let data = response.dataNoCopy(key: .containerEvent) else {
+                return []
+            }
+            return try JSONDecoder().decode([ContainerEvent].self, from: data)
+        } catch {
+            throw ContainerizationError(
+                .internalError,
+                message: "failed to get container events",
                 cause: error
             )
         }

@@ -14,17 +14,23 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-public struct ContainerCreateOptions: Codable, Sendable {
-    public let autoRemove: Bool
-    public let rootFsOverride: Filesystem?
-    public let restartPolicy: RestartPolicy?
+import Foundation
 
-    public init(autoRemove: Bool, rootFsOverride: Filesystem? = nil, restartPolicy: RestartPolicy? = nil) {
-        self.autoRemove = autoRemove
-        self.rootFsOverride = rootFsOverride
-        self.restartPolicy = restartPolicy
+public struct RestartPolicy: Codable, Sendable, Equatable {
+    public enum Mode: String, Codable, Sendable, Equatable {
+        case no
+        case always
+        case onFailure = "on-failure"
+        case unlessStopped = "unless-stopped"
     }
 
-    public static let `default` = ContainerCreateOptions(autoRemove: false)
+    public let mode: Mode
+    public let maxRetries: Int
 
+    public static let none = RestartPolicy(mode: .no, maxRetries: 0)
+
+    public init(mode: Mode, maxRetries: Int = 0) {
+        self.mode = mode
+        self.maxRetries = maxRetries
+    }
 }

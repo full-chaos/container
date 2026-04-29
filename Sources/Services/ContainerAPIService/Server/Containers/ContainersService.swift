@@ -60,6 +60,8 @@ public actor ContainersService {
 
     private let lock: AsyncLock
     private var containers: [String: ContainerState]
+    private var eventBuffer: [ContainerEvent] = []
+    private static let maxEventBufferSize = 1000
 
     // FIXME: Find a better mechanism for services running on the APIServer to work with each other
     private weak var networksService: NetworksService?
@@ -391,6 +393,7 @@ public actor ContainersService {
                     startedDate: nil
                 )
                 await self.setContainerState(configuration.id, ContainerState(snapshot: snapshot, allocatedAttachments: []), context: context)
+                await self.recordEvent(configuration.id, action: .create)
             } catch {
                 throw error
             }
@@ -484,6 +487,7 @@ public actor ContainersService {
                 state.client = sandboxClient
                 state.allocatedAttachments = allocatedAttachments
                 await self.setContainerState(id, state, context: context)
+                await self.recordEvent(id, action: .start)
             } catch {
                 for allocatedAttach in allocatedAttachments {
                     do {
@@ -678,6 +682,8 @@ public actor ContainersService {
             }
         }
         try await handleContainerExit(id: id)
+        recordEvent(id, action: .stop)
+        recordEvent(id, action: .die)
     }
 
     public func dial(id: String, port: UInt32) async throws -> FileHandle {
@@ -758,8 +764,11 @@ public actor ContainersService {
         try await client.resize(processID, size: size)
     }
 
-    // Get the logs for the container.
     public func logs(id: String) async throws -> [FileHandle] {
+        try await logs(id: id, options: .default)
+    }
+
+    public func logs(id: String, options: ContainerLogOptions) async throws -> [FileHandle] {
         log.debug(
             "ContainersService: enter",
             metadata: [
@@ -777,24 +786,79 @@ public actor ContainersService {
             )
         }
 
-        // Logs doesn't care if the container is running or not, just that
-        // the bundle is there, and that the files actually exist. We do
-        // first try and get the container state so we get a nicer error message
-        // (container foo not found) however.
         do {
             _ = try _getContainerState(id: id)
             let path = self.containerRoot.appendingPathComponent(id)
             let bundle = ContainerResource.Bundle(path: path)
-            return [
+            var handles = [
                 try FileHandle(forReadingFrom: bundle.containerLog),
                 try FileHandle(forReadingFrom: bundle.bootlog),
             ]
+
+            if let since = options.since {
+                handles = handles.map { fh in
+                    Self.filterFileHandleSince(fh, since: since)
+                }
+            }
+
+            return handles
         } catch {
             throw ContainerizationError(
                 .internalError,
                 message: "failed to open container logs: \(error)"
             )
         }
+    }
+
+    private static func filterFileHandleSince(_ fh: FileHandle, since: Date) -> FileHandle {
+        guard let data = try? fh.readToEnd(),
+              let content = String(data: data, encoding: .utf8) else {
+            return fh
+        }
+
+        let iso8601 = ISO8601DateFormatter()
+        iso8601.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+
+        let lines = content.components(separatedBy: .newlines)
+        var filtered: [String] = []
+        for line in lines {
+            guard !line.isEmpty else { continue }
+            let parts = line.split(separator: " ", maxSplits: 1)
+            guard let timestampStr = parts.first else {
+                filtered.append(line)
+                continue
+            }
+            if let date = iso8601.date(from: String(timestampStr)) ?? fallbackFormatter.date(from: String(timestampStr)) {
+                if date >= since {
+                    filtered.append(line)
+                }
+            } else {
+                filtered.append(line)
+            }
+        }
+
+        let pipe = Pipe()
+        let result = filtered.joined(separator: "\n")
+        if let resultData = result.data(using: .utf8) {
+            pipe.fileHandleForWriting.write(resultData)
+        }
+        try? pipe.fileHandleForWriting.close()
+        return pipe.fileHandleForReading
+    }
+
+    private func recordEvent(_ containerId: String, action: ContainerEvent.Action) {
+        let event = ContainerEvent(containerId: containerId, action: action)
+        eventBuffer.append(event)
+        if eventBuffer.count > Self.maxEventBufferSize {
+            eventBuffer.removeFirst(eventBuffer.count - Self.maxEventBufferSize)
+        }
+    }
+
+    public func recentEvents(since: Date? = nil) -> [ContainerEvent] {
+        guard let since else { return eventBuffer }
+        return eventBuffer.filter { $0.timestamp >= since }
     }
 
     /// Get statistics for the container.
@@ -872,6 +936,7 @@ public actor ContainersService {
                         "id": "\(id)",
                     ]
                 )
+                await self.recordEvent(id, action: .destroy)
             }
         case .stopping:
             throw ContainerizationError(
@@ -881,6 +946,7 @@ public actor ContainersService {
         default:
             try await self.lock.withLock(logMetadata: ["acquirer": "\(#function)", "id": "\(id)"]) { context in
                 try await self.cleanUp(id: id, context: context)
+                await self.recordEvent(id, action: .destroy)
             }
         }
     }
@@ -1011,6 +1077,7 @@ public actor ContainersService {
         }
 
         state.snapshot.status = .stopped
+        state.snapshot.lastExitCode = code?.exitCode
         state.snapshot.networks = []
         state.client = nil
         state.allocatedAttachments = []
