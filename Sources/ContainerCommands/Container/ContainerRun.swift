@@ -179,7 +179,7 @@ extension Application {
 
         static func parseRestartPolicy(_ raw: String?) -> RestartPolicy? {
             guard let raw, !raw.isEmpty else { return nil }
-            if raw == "no" { return .none }
+            if raw == "no" { return RestartPolicy.none }
             if raw == "always" { return RestartPolicy(mode: .always) }
             if raw == "unless-stopped" { return RestartPolicy(mode: .unlessStopped) }
             if raw.hasPrefix("on-failure") {

@@ -208,14 +208,14 @@ private final class LocalXPCServer: @unchecked Sendable {
 
         xpc_connection_set_event_handler(self.listener) { event in
             guard xpc_get_type(event) == XPC_TYPE_CONNECTION else { return }
-            let peer = event
-            xpc_connection_set_event_handler(peer) { msg in
+            let peer = XPCConnectionHandle(connection: event)
+            xpc_connection_set_event_handler(peer.connection) { msg in
                 guard xpc_get_type(msg) == XPC_TYPE_DICTIONARY else { return }
-                let request = XPCRequest(message: msg, peer: peer)
+                let request = XPCRequest(message: msg, peer: peer.connection)
                 pending.modify { $0.append(request) }
                 handler(request)
             }
-            xpc_connection_activate(peer)
+            xpc_connection_activate(peer.connection)
         }
         xpc_connection_activate(self.listener)
     }
@@ -246,6 +246,10 @@ private struct XPCRequest: @unchecked Sendable {
     }
 }
 
+private struct XPCConnectionHandle: @unchecked Sendable {
+    let connection: xpc_connection_t
+}
+
 /// Minimal thread-safe single-value cell. Used to flip server behavior mid-test
 /// without dragging in additional async machinery.
 private final class Mutex<T>: @unchecked Sendable {
@@ -255,17 +259,20 @@ private final class Mutex<T>: @unchecked Sendable {
     init(_ value: T) { self.value = value }
 
     func get() -> T {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         return value
     }
 
     func set(_ new: T) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         value = new
     }
 
     func modify(_ body: (inout T) -> Void) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         body(&value)
     }
 }

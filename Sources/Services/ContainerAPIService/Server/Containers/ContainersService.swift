@@ -811,8 +811,10 @@ public actor ContainersService {
     }
 
     private static func filterFileHandleSince(_ fh: FileHandle, since: Date) -> FileHandle {
-        guard let data = try? fh.readToEnd(),
-              let content = String(data: data, encoding: .utf8) else {
+        guard
+            let data = try? fh.readToEnd(),
+            let content = String(data: data, encoding: .utf8)
+        else {
             return fh
         }
 

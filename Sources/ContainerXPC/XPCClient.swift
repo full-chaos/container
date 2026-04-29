@@ -178,7 +178,11 @@ extension XPCClient {
     /// This unavailable shim keeps the old call shape compiling-as-error so
     /// callers are forced to choose either ``send(_:)`` for mutating requests
     /// or ``send(_:timeoutForIdempotentRequest:)`` for idempotent ones.
-    @available(*, unavailable, message: "responseTimeout may drop late replies. Use send(_:) for mutating requests, or send(_:timeoutForIdempotentRequest:) only for idempotent/read-only requests.")
+    @available(
+        *,
+        unavailable,
+        message: "responseTimeout may drop late replies. Use send(_:) for mutating requests, or send(_:timeoutForIdempotentRequest:) only for idempotent/read-only requests."
+    )
     @discardableResult
     public func send(_ message: XPCMessage, responseTimeout: Duration?) async throws -> XPCMessage {
         fatalError("unavailable")
