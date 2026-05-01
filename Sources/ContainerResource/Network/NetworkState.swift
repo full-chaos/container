@@ -116,3 +116,32 @@ public enum NetworkState: Codable, Sendable {
         }
     }
 }
+
+extension NetworkState {
+    /// Creates a compatibility ``NetworkState`` view from a ``NetworkResource``.
+    ///
+    /// Retained so downstream clients still compiling against the pre-0.12.0
+    /// `NetworkState` API can keep bridging existence probes while newer
+    /// callers adopt `NetworkResource`.
+    public init(_ networkResource: NetworkResource) {
+        switch networkResource.status.phase {
+        case "running":
+            if let ipv4Subnet = networkResource.status.ipv4Subnet,
+                let ipv4Gateway = networkResource.status.ipv4Gateway
+            {
+                self = .running(
+                    networkResource.config,
+                    NetworkPluginStatus(
+                        ipv4Subnet: ipv4Subnet,
+                        ipv4Gateway: ipv4Gateway,
+                        ipv6Subnet: networkResource.status.ipv6Subnet
+                    )
+                )
+            } else {
+                self = .created(networkResource.config)
+            }
+        default:
+            self = .created(networkResource.config)
+        }
+    }
+}
