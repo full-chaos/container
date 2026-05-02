@@ -30,6 +30,43 @@ public struct Flags {
         public var debug = false
     }
 
+    /// Minimal subset of process-related options that intentionally does NOT
+    /// claim the common short flags (`-e`, `-u`, `-w`, `-i`, `-t`).
+    ///
+    /// Downstream tools that wrap `container` (e.g. `compose run` /
+    /// `compose exec`) collide with `Flags.Process` because that struct
+    /// registers the short flags itself. Embedding ``ProcessBase`` instead
+    /// of ``Process`` lets the wrapping tool reclaim those short names for
+    /// its own subcommand-specific options while still inheriting the safe
+    /// long-form options (`--cwd`, `--env-file`).
+    ///
+    /// Long-form behavior is identical to the matching fields in
+    /// ``Process`` so a caller can switch between them without touching the
+    /// rest of its `@OptionGroup` wiring.
+    public struct ProcessBase: ParsableArguments {
+        public init() {}
+
+        public init(cwd: String?, envFile: [String]) {
+            self.cwd = cwd
+            self.envFile = envFile
+        }
+
+        @Option(
+            name: .long,
+            help: .init(
+                "Set the initial working directory inside the container",
+                valueName: "dir"
+            )
+        )
+        public var cwd: String?
+
+        @Option(
+            name: .long,
+            help: "Read in a file of environment variables (key=value format, ignores # comments and blank lines)"
+        )
+        public var envFile: [String] = []
+    }
+
     public struct Process: ParsableArguments {
         public init() {}
 
