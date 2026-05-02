@@ -61,4 +61,12 @@ actor AttachmentAllocator {
     func lookup(hostname: String) async throws -> UInt32? {
         hostnames[hostname]
     }
+
+    /// Pre-reserve a hostname-to-address mapping in the allocator's pool.
+    /// The address must be within the allocator's range; out-of-range or
+    /// already-allocated addresses cause the underlying allocator to throw.
+    func reserveHostname(hostname: String, address: UInt32) async throws {
+        try allocator.reserve(address)
+        hostnames[hostname] = address
+    }
 }

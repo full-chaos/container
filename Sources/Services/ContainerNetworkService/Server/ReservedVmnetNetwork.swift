@@ -121,7 +121,13 @@ public final class ReservedVmnetNetwork: Network {
 
         // set the IPv4 subnet if the caller provided one
         if let ipv4Subnet {
-            let gateway = IPv4Address(ipv4Subnet.lower.value + 1)
+            let gateway = configuration.ipv4Gateway ?? IPv4Address(ipv4Subnet.lower.value + 1)
+            guard ipv4Subnet.contains(gateway) else {
+                throw ContainerizationError(
+                    .invalidArgument,
+                    message: "gateway \(gateway) is not within IPv4 subnet \(ipv4Subnet)"
+                )
+            }
             var gatewayAddr = in_addr()
             inet_pton(AF_INET, gateway.description, &gatewayAddr)
             let mask = IPv4Address(ipv4Subnet.prefix.prefixMask32)

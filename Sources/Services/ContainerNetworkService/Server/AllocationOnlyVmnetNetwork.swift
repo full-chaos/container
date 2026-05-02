@@ -69,7 +69,13 @@ public actor AllocationOnlyVmnetNetwork: Network {
 
         let ipv4Subnet = configuration.ipv4Subnet ?? Self.defaultIPv4Subnet
 
-        let gateway = IPv4Address(ipv4Subnet.lower.value + 1)
+        let gateway = configuration.ipv4Gateway ?? IPv4Address(ipv4Subnet.lower.value + 1)
+        guard ipv4Subnet.contains(gateway) else {
+            throw ContainerizationError(
+                .invalidArgument,
+                message: "gateway \(gateway) is not within IPv4 subnet \(ipv4Subnet)"
+            )
+        }
         let status = NetworkPluginStatus(
             ipv4Subnet: ipv4Subnet,
             ipv4Gateway: gateway,
