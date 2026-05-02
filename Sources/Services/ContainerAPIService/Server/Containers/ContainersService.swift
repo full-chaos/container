@@ -60,6 +60,8 @@ public actor ContainersService {
 
     private let lock: AsyncLock
     private var containers: [String: ContainerState]
+    private var eventBuffer: [ContainerEvent] = []
+    private static let maxEventBufferSize = 1000
 
     // FIXME: Find a better mechanism for services running on the APIServer to work with each other
     private weak var networksService: NetworksService?
@@ -391,6 +393,7 @@ public actor ContainersService {
                     startedDate: nil
                 )
                 await self.setContainerState(configuration.id, ContainerState(snapshot: snapshot, allocatedAttachments: []), context: context)
+                await self.recordEvent(configuration.id, action: .create)
             } catch {
                 throw error
             }
@@ -484,6 +487,7 @@ public actor ContainersService {
                 state.client = sandboxClient
                 state.allocatedAttachments = allocatedAttachments
                 await self.setContainerState(id, state, context: context)
+                await self.recordEvent(id, action: .start)
             } catch {
                 for allocatedAttach in allocatedAttachments {
                     do {
@@ -678,6 +682,8 @@ public actor ContainersService {
             }
         }
         try await handleContainerExit(id: id)
+        recordEvent(id, action: .stop)
+        recordEvent(id, action: .die)
     }
 
     public func dial(id: String, port: UInt32) async throws -> FileHandle {
@@ -872,6 +878,7 @@ public actor ContainersService {
                         "id": "\(id)",
                     ]
                 )
+                await self.recordEvent(id, action: .destroy)
             }
         case .stopping:
             throw ContainerizationError(
@@ -881,8 +888,22 @@ public actor ContainersService {
         default:
             try await self.lock.withLock(logMetadata: ["acquirer": "\(#function)", "id": "\(id)"]) { context in
                 try await self.cleanUp(id: id, context: context)
+                await self.recordEvent(id, action: .destroy)
             }
         }
+    }
+
+    private func recordEvent(_ containerId: String, action: ContainerEvent.Action) {
+        let event = ContainerEvent(containerId: containerId, action: action)
+        eventBuffer.append(event)
+        if eventBuffer.count > Self.maxEventBufferSize {
+            eventBuffer.removeFirst(eventBuffer.count - Self.maxEventBufferSize)
+        }
+    }
+
+    public func recentEvents(since: Date? = nil) -> [ContainerEvent] {
+        guard let since else { return eventBuffer }
+        return eventBuffer.filter { $0.timestamp >= since }
     }
 
     public func containerDiskUsage(id: String) async throws -> UInt64 {

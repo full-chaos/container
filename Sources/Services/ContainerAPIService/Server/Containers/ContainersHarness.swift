@@ -331,4 +331,13 @@ public struct ContainersHarness: Sendable {
         try await service.exportRootfs(id: id, archive: archiveUrl)
         return message.reply()
     }
+
+    @Sendable
+    public func events(_ message: XPCMessage) async throws -> XPCMessage {
+        let events = await service.recentEvents()
+        let data = try JSONEncoder().encode(events)
+        let reply = message.reply()
+        reply.set(key: .containerEvent, value: data)
+        return reply
+    }
 }
