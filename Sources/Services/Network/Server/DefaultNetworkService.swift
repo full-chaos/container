@@ -30,6 +30,7 @@ public actor DefaultNetworkService: NetworkService {
     /// Set up a network service for the specified network.
     public init(
         network: any Network,
+        configuration: NetworkConfiguration,
         log: Logger
     ) async throws {
         guard let status = await network.status else {
@@ -37,12 +38,87 @@ public actor DefaultNetworkService: NetworkService {
         }
 
         let subnet = status.ipv4Subnet
-        let size = Int(subnet.upper.value - subnet.lower.value - 3)
+
+        // Determine the allocator range. By default skip the network address,
+        // gateway, and broadcast (`subnet.lower + 2 ... subnet.upper - 1`). When
+        // an explicit `ipv4Range` was configured, use exactly that span as the
+        // allocator's pool — the user has taken responsibility for excluding
+        // the gateway and any aux reservations.
+        let allocatorLower: UInt32
+        let allocatorSize: Int
+        if let ipv4Range = configuration.ipv4Range {
+            allocatorLower = ipv4Range.lower.value
+            allocatorSize = Int(ipv4Range.upper.value - ipv4Range.lower.value + 1)
+        } else {
+            allocatorLower = subnet.lower.value + 2
+            allocatorSize = Int(subnet.upper.value - subnet.lower.value - 3)
+        }
         self.network = network
         self.log = log
-        self.allocator = try AttachmentAllocator(lower: subnet.lower.value + 2, size: size)
+        self.allocator = try AttachmentAllocator(lower: allocatorLower, size: allocatorSize)
         self.macAddresses = [:]
         self.allocationsBySession = [:]
+
+        // If the configured IPv4 gateway differs from the default (`subnet.lower + 1`)
+        // and falls within the dynamic allocator's pool, reserve it so the runtime
+        // never hands the gateway out to a container.
+        if let configuredGateway = configuration.ipv4Gateway, configuredGateway.value != subnet.lower.value + 1 {
+            if configuredGateway.value >= allocatorLower
+                && configuredGateway.value < allocatorLower + UInt32(allocatorSize)
+            {
+                do {
+                    try await self.allocator.reserveHostname(
+                        hostname: "__gateway__",
+                        address: configuredGateway.value
+                    )
+                } catch {
+                    log.warning(
+                        "failed to pre-reserve configured gateway address",
+                        metadata: [
+                            "address": "\(configuredGateway)",
+                            "error": "\(error)",
+                        ])
+                }
+            }
+        }
+
+        // Pre-reserve aux addresses that fall within the allocator's range so the
+        // dynamic allocator never hands them out. Out-of-range aux addresses are
+        // recorded in logs only — they are already outside the dynamic pool.
+        if let auxAddresses = configuration.auxAddresses {
+            for (hostname, address) in auxAddresses {
+                let value = address.value
+                guard
+                    value >= allocatorLower
+                        && value < allocatorLower + UInt32(allocatorSize)
+                else {
+                    log.info(
+                        "aux address outside dynamic allocation range; recorded for reference only",
+                        metadata: [
+                            "hostname": "\(hostname)",
+                            "address": "\(address)",
+                        ])
+                    continue
+                }
+                do {
+                    try await self.allocator.reserveHostname(hostname: hostname, address: value)
+                    log.info(
+                        "pre-reserved aux address",
+                        metadata: [
+                            "hostname": "\(hostname)",
+                            "address": "\(address)",
+                        ])
+                } catch {
+                    log.warning(
+                        "failed to pre-reserve aux address",
+                        metadata: [
+                            "hostname": "\(hostname)",
+                            "address": "\(address)",
+                            "error": "\(error)",
+                        ])
+                }
+            }
+        }
     }
 
     @Sendable

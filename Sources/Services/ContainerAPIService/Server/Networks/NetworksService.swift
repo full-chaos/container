@@ -174,6 +174,12 @@ public actor NetworksService {
                 mode: configuration.mode,
                 ipv4Subnet: configuration.ipv4Subnet,
                 ipv6Subnet: configuration.ipv6Subnet,
+                ipv4Gateway: configuration.ipv4Gateway,
+                ipv4Range: configuration.ipv4Range,
+                auxAddresses: configuration.auxAddresses,
+                driverOpts: configuration.driverOpts,
+                attachable: configuration.attachable,
+                enableIPv6: configuration.enableIPv6,
                 labels: configuration.labels,
                 plugin: configuration.plugin,
                 options: configuration.options
@@ -393,6 +399,34 @@ public actor NetworksService {
 
         if let variant = configuration.options["variant"] {
             args += ["--variant", variant]
+        }
+
+        if let ipv4Gateway = configuration.ipv4Gateway {
+            args += ["--gateway", ipv4Gateway.description]
+        }
+
+        if let ipv4Range = configuration.ipv4Range {
+            args += ["--ip-range", ipv4Range.description]
+        }
+
+        if let auxAddresses = configuration.auxAddresses, !auxAddresses.isEmpty {
+            // Encode as JSON so a single argv value can carry the full hostname-to-IP mapping.
+            let serializable = auxAddresses.mapValues { $0.description }
+            let payload = try JSONEncoder().encode(serializable)
+            guard let payloadString = String(data: payload, encoding: .utf8) else {
+                throw ContainerizationError(.internalError, message: "failed to encode aux-addresses for plugin")
+            }
+            args += ["--aux-addresses", payloadString]
+        }
+
+        if let driverOpts = configuration.driverOpts {
+            for (key, value) in driverOpts {
+                args += ["--driver-opt", "\(key)=\(value)"]
+            }
+        }
+
+        if configuration.enableIPv6 == true {
+            args.append("--ipv6")
         }
 
         let entityPath = try store.entityPath(configuration.id)
