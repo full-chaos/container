@@ -344,6 +344,48 @@ public struct Flags {
 
         @Option(name: [.customLong("volume"), .short], help: "Bind mount a volume into the container")
         public var volumes: [String] = []
+
+        @Option(
+            name: .customLong("health-cmd"),
+            help: "Healthcheck command to run inside the container (executed via /bin/sh -c)."
+        )
+        public var healthCmd: String?
+
+        @Option(
+            name: .customLong("health-interval"),
+            help: "Time between healthcheck probes, in seconds (default 30)."
+        )
+        public var healthInterval: Double?
+
+        @Option(
+            name: .customLong("health-timeout"),
+            help: "Per-probe deadline for the healthcheck, in seconds (default 30)."
+        )
+        public var healthTimeout: Double?
+
+        @Option(
+            name: .customLong("health-retries"),
+            help: "Number of consecutive failed probes before the container is reported unhealthy (default 3)."
+        )
+        public var healthRetries: Int?
+
+        @Option(
+            name: .customLong("health-start-period"),
+            help: "Grace window after start during which failed probes do not count, in seconds."
+        )
+        public var healthStartPeriod: Double?
+
+        @Option(
+            name: .customLong("health-start-interval"),
+            help: "Probe interval used while still within the grace window, in seconds."
+        )
+        public var healthStartInterval: Double?
+
+        @Flag(
+            name: .customLong("no-healthcheck"),
+            help: "Disable any image-baked healthcheck for this container."
+        )
+        public var noHealthcheck: Bool = false
     }
 
     public struct Progress: ParsableArguments {

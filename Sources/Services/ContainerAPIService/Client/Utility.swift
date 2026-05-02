@@ -266,7 +266,36 @@ public struct Utility {
             config.runtimeHandler = runtime
         }
 
+        config.healthcheck = try Self.makeHealthcheck(management: management)
+
         return (config, kernel, management.initImage)
+    }
+
+    private static func makeHealthcheck(management: Flags.Management) throws -> Healthcheck? {
+        if management.noHealthcheck {
+            return try Healthcheck(test: ["NONE"])
+        }
+        guard let cmd = management.healthCmd else {
+            // Reject orphan health-* flags without a command — catch typos early.
+            if management.healthInterval != nil || management.healthTimeout != nil
+                || management.healthRetries != nil || management.healthStartPeriod != nil
+                || management.healthStartInterval != nil
+            {
+                throw ContainerizationError(
+                    .invalidArgument,
+                    message: "--health-* flags require --health-cmd to be specified"
+                )
+            }
+            return nil
+        }
+        return try Healthcheck(
+            test: ["CMD-SHELL", cmd],
+            interval: management.healthInterval ?? Healthcheck.defaultInterval,
+            timeout: management.healthTimeout ?? Healthcheck.defaultTimeout,
+            retries: management.healthRetries ?? Healthcheck.defaultRetries,
+            startPeriod: management.healthStartPeriod,
+            startInterval: management.healthStartInterval
+        )
     }
 
     static func getAttachmentConfigurations(
