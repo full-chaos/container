@@ -72,6 +72,10 @@ public struct ContainerConfiguration: Sendable, Codable {
     public var readonlyPaths: [String]?
     /// The time at which the container was created.
     public var creationDate: Date = Date()
+    /// Optional periodic healthcheck spec. When set and not effectively
+    /// disabled, the API server starts a per-container observer that runs
+    /// the configured probe and updates ``ContainerSnapshot/health``.
+    public var healthcheck: Healthcheck?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -99,6 +103,7 @@ public struct ContainerConfiguration: Sendable, Codable {
         case maskedPaths
         case readonlyPaths
         case creationDate
+        case healthcheck
     }
 
     /// Create a configuration from the supplied Decoder, initializing missing
@@ -137,6 +142,7 @@ public struct ContainerConfiguration: Sendable, Codable {
         maskedPaths = try container.decodeIfPresent([String].self, forKey: .maskedPaths)
         readonlyPaths = try container.decodeIfPresent([String].self, forKey: .readonlyPaths)
         creationDate = try container.decodeIfPresent(Date.self, forKey: .creationDate) ?? Date(timeIntervalSince1970: 0)
+        healthcheck = try container.decodeIfPresent(Healthcheck.self, forKey: .healthcheck)
     }
 
     public struct DNSConfiguration: Sendable, Codable {

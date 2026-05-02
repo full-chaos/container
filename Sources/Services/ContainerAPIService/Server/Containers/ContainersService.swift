@@ -35,6 +35,7 @@ public actor ContainersService {
     struct ContainerState {
         var snapshot: ContainerSnapshot
         var client: RuntimeClient? = nil
+        var healthGeneration: UInt64 = 0
 
         func getClient() throws -> RuntimeClient {
             guard let client else {
@@ -58,6 +59,7 @@ public actor ContainersService {
     private let runtimePlugins: [Plugin]
     private let exitMonitor: ExitMonitor
     private let containerSystemConfig: ContainerSystemConfig
+    private let healthMonitor: HealthMonitor
 
     private let lock: AsyncLock
     private var containers: [String: ContainerState]
@@ -75,6 +77,7 @@ public actor ContainersService {
         let containerRoot = appRoot.appendingPathComponent("containers")
         try FileManager.default.createDirectory(at: containerRoot, withIntermediateDirectories: true)
         self.exitMonitor = ExitMonitor(log: log)
+        self.healthMonitor = HealthMonitor(log: log)
         self.lock = AsyncLock(log: log)
         self.containerRoot = containerRoot
         self.pluginLoader = pluginLoader
@@ -557,7 +560,25 @@ public actor ContainersService {
                 state.snapshot.status = .running
                 state.snapshot.networks = sandboxSnapshot.networks
                 state.snapshot.startedDate = Date()
+                state.healthGeneration &+= 1
+                let healthGeneration = state.healthGeneration
+                let healthcheck = state.snapshot.configuration.healthcheck
+                let healthClient = client
+                let startedAt = state.snapshot.startedDate ?? Date()
                 await self.setContainerState(id, state, context: context)
+
+                if let healthcheck {
+                    let prober = RuntimeClientHealthProber(runtimeClient: healthClient, log: self.log)
+                    await self.healthMonitor.register(
+                        id: id,
+                        generation: healthGeneration,
+                        startedAt: startedAt,
+                        healthcheck: healthcheck,
+                        prober: prober
+                    ) { [weak self] containerID, gen, status in
+                        await self?.applyHealthUpdate(id: containerID, generation: gen, status: status)
+                    }
+                }
             } catch {
                 await self.exitMonitor.stopTracking(id: id)
                 try? await client.stop(options: ContainerStopOptions.default)
@@ -947,6 +968,7 @@ public actor ContainersService {
         }
 
         await self.exitMonitor.stopTracking(id: id)
+        await self.healthMonitor.unregister(id: id)
 
         // Shutdown and deregister the runtime service
         self.log.info("shutting down runtime service", metadata: ["id": "\(id)"])
@@ -1116,6 +1138,18 @@ public actor ContainersService {
     }
 
     private func setContainerState(_ id: String, _ state: ContainerState, context: AsyncLock.Context) async {
+        self.containers[id] = state
+    }
+
+    /// Apply a health-status update from the ``HealthMonitor`` observer.
+    /// Generation-gated: drops updates whose generation does not match the
+    /// current container instance, the container has been removed, or its
+    /// status is no longer ``RuntimeStatus/running``.
+    private func applyHealthUpdate(id: String, generation: UInt64, status: HealthStatus) async {
+        guard var state = self.containers[id] else { return }
+        guard state.healthGeneration == generation else { return }
+        guard state.snapshot.status == .running else { return }
+        state.snapshot.health = status
         self.containers[id] = state
     }
 
