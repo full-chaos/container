@@ -344,4 +344,27 @@ public struct ContainerClient: Sendable {
             )
         }
     }
+
+    /// Fetch the daemon's recent container lifecycle events.
+    ///
+    /// Returns the events currently held in the daemon's bounded ring
+    /// buffer (`create` / `start` / `stop` / `die` / `destroy`). Buffer
+    /// rollover drops the oldest entries; events are not persisted across
+    /// daemon restarts.
+    public func events() async throws -> [ContainerEvent] {
+        do {
+            let request = XPCMessage(route: .containerEvent)
+            let response = try await xpcClient.send(request)
+            guard let data = response.dataNoCopy(key: .containerEvent) else {
+                return []
+            }
+            return try JSONDecoder().decode([ContainerEvent].self, from: data)
+        } catch {
+            throw ContainerizationError(
+                .internalError,
+                message: "failed to get container events",
+                cause: error
+            )
+        }
+    }
 }
