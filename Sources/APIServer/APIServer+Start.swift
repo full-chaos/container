@@ -307,6 +307,7 @@ extension APIServer {
             routes[XPCRoute.containerCopyIn] = XPCServer.route(harness.copyIn)
             routes[XPCRoute.containerCopyOut] = XPCServer.route(harness.copyOut)
             routes[XPCRoute.containerExport] = XPCServer.route(harness.export)
+            routes[XPCRoute.containerEvent] = XPCServer.route(harness.events)
 
             return service
         }
