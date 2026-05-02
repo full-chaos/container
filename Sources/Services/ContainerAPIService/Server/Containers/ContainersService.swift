@@ -758,8 +758,11 @@ public actor ContainersService {
         try await client.resize(processID, size: size)
     }
 
-    // Get the logs for the container.
     public func logs(id: String) async throws -> [FileHandle] {
+        try await logs(id: id, options: .default)
+    }
+
+    public func logs(id: String, options: ContainerLogOptions) async throws -> [FileHandle] {
         log.debug(
             "ContainersService: enter",
             metadata: [
@@ -777,24 +780,66 @@ public actor ContainersService {
             )
         }
 
-        // Logs doesn't care if the container is running or not, just that
-        // the bundle is there, and that the files actually exist. We do
-        // first try and get the container state so we get a nicer error message
-        // (container foo not found) however.
         do {
             _ = try _getContainerState(id: id)
             let path = self.containerRoot.appendingPathComponent(id)
             let bundle = ContainerResource.Bundle(path: path)
-            return [
+            var handles = [
                 try FileHandle(forReadingFrom: bundle.containerLog),
                 try FileHandle(forReadingFrom: bundle.bootlog),
             ]
+
+            if let since = options.since {
+                handles = handles.map { fh in
+                    Self.filterFileHandleSince(fh, since: since)
+                }
+            }
+
+            return handles
         } catch {
             throw ContainerizationError(
                 .internalError,
                 message: "failed to open container logs: \(error)"
             )
         }
+    }
+
+    private static func filterFileHandleSince(_ fh: FileHandle, since: Date) -> FileHandle {
+        guard let data = try? fh.readToEnd(),
+              let content = String(data: data, encoding: .utf8) else {
+            return fh
+        }
+
+        let iso8601 = ISO8601DateFormatter()
+        iso8601.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+
+        let lines = content.components(separatedBy: .newlines)
+        var filtered: [String] = []
+        for line in lines {
+            guard !line.isEmpty else { continue }
+            let parts = line.split(separator: " ", maxSplits: 1)
+            guard let timestampStr = parts.first else {
+                filtered.append(line)
+                continue
+            }
+            if let date = iso8601.date(from: String(timestampStr)) ?? fallbackFormatter.date(from: String(timestampStr)) {
+                if date >= since {
+                    filtered.append(line)
+                }
+            } else {
+                filtered.append(line)
+            }
+        }
+
+        let pipe = Pipe()
+        let result = filtered.joined(separator: "\n")
+        if let resultData = result.data(using: .utf8) {
+            pipe.fileHandleForWriting.write(resultData)
+        }
+        try? pipe.fileHandleForWriting.close()
+        return pipe.fileHandleForReading
     }
 
     /// Get statistics for the container.

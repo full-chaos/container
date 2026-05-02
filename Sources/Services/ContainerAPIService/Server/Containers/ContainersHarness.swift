@@ -288,7 +288,16 @@ public struct ContainersHarness: Sendable {
                 message: "id cannot be empty"
             )
         }
-        let fds = try await service.logs(id: id)
+
+        var since: Date? = nil
+        let sinceRaw = message.date(key: .logSince)
+        if sinceRaw.timeIntervalSince1970 > 0 {
+            since = sinceRaw
+        }
+        let timestamps = message.bool(key: .logTimestamps)
+        let options = ContainerLogOptions(since: since, timestamps: timestamps)
+
+        let fds = try await service.logs(id: id, options: options)
         let reply = message.reply()
         try reply.set(key: .logs, value: fds)
         return reply

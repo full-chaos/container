@@ -139,6 +139,11 @@ public enum XPCKeys: String {
 
     /// Disk usage
     case diskUsageStats
+
+    /// Optional `since: Date` filter on `logs`.
+    case logSince
+    /// Optional `timestamps: Bool` flag on `logs`.
+    case logTimestamps
 }
 
 public enum XPCRoute: String {
