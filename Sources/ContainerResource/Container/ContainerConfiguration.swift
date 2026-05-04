@@ -59,6 +59,10 @@ public struct ContainerConfiguration: Sendable, Codable {
     public var capDrop: [String] = []
     /// Size of /dev/shm in bytes. When nil, the default size is used.
     public var shmSize: UInt64?
+    /// Optional periodic healthcheck spec. When set and not effectively
+    /// disabled, the API server starts a per-container observer that runs
+    /// the configured probe and updates ``ContainerSnapshot/health``.
+    public var healthcheck: Healthcheck?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -82,6 +86,7 @@ public struct ContainerConfiguration: Sendable, Codable {
         case capAdd
         case capDrop
         case shmSize
+        case healthcheck
     }
 
     /// Create a configuration from the supplied Decoder, initializing missing
@@ -116,6 +121,7 @@ public struct ContainerConfiguration: Sendable, Codable {
         capAdd = try container.decodeIfPresent([String].self, forKey: .capAdd) ?? []
         capDrop = try container.decodeIfPresent([String].self, forKey: .capDrop) ?? []
         shmSize = try container.decodeIfPresent(UInt64.self, forKey: .shmSize)
+        healthcheck = try container.decodeIfPresent(Healthcheck.self, forKey: .healthcheck)
     }
 
     public struct DNSConfiguration: Sendable, Codable {
