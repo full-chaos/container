@@ -344,6 +344,12 @@ public struct Flags {
 
         @Option(name: [.customLong("volume"), .short], help: "Bind mount a volume into the container")
         public var volumes: [String] = []
+
+        @Option(
+            name: .customLong("restart"),
+            help: "Restart policy (no, always, on-failure[:max-retries], unless-stopped)"
+        )
+        public var restart: String?
     }
 
     public struct Progress: ParsableArguments {
