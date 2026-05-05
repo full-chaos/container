@@ -14,17 +14,11 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-public struct ContainerCreateOptions: Codable, Sendable {
-    public let autoRemove: Bool
-    public let rootFsOverride: Filesystem?
-    public let restartPolicy: RestartPolicy?
+import Foundation
 
-    public init(autoRemove: Bool, rootFsOverride: Filesystem? = nil, restartPolicy: RestartPolicy? = nil) {
-        self.autoRemove = autoRemove
-        self.rootFsOverride = rootFsOverride
-        self.restartPolicy = restartPolicy
-    }
-
-    public static let `default` = ContainerCreateOptions(autoRemove: false)
-
+public enum HealthStatus: String, CaseIterable, Sendable, Codable {
+    case none
+    case starting
+    case healthy
+    case unhealthy
 }

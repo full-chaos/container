@@ -30,6 +30,34 @@ public struct Flags {
         public var debug = false
     }
 
+    /// Minimal subset of process-related flags that don't claim the common
+    /// short flags (`-e`, `-u`, `-w`, `-i`, `-t`). Downstream tools like
+    /// Container-Compose can `@OptionGroup` this instead of `Flags.Process`
+    /// to reclaim those short names for their own compose-specific options.
+    public struct ProcessBase: ParsableArguments {
+        public init() {}
+
+        public init(cwd: String?, envFile: [String]) {
+            self.cwd = cwd
+            self.envFile = envFile
+        }
+
+        @Option(
+            name: .long,
+            help: .init(
+                "Set the initial working directory inside the container",
+                valueName: "dir"
+            )
+        )
+        public var cwd: String?
+
+        @Option(
+            name: .long,
+            help: "Read in a file of environment variables (key=value format, ignores # comments and blank lines)"
+        )
+        public var envFile: [String] = []
+    }
+
     public struct Process: ParsableArguments {
         public init() {}
 
@@ -344,6 +372,9 @@ public struct Flags {
 
         @Option(name: [.customLong("volume"), .short], help: "Bind mount a volume into the container")
         public var volumes: [String] = []
+
+        @Option(name: .long, help: "Restart policy (no, always, on-failure[:max-retries], unless-stopped)")
+        public var restart: String?
     }
 
     public struct Progress: ParsableArguments {

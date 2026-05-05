@@ -14,17 +14,24 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-public struct ContainerCreateOptions: Codable, Sendable {
-    public let autoRemove: Bool
-    public let rootFsOverride: Filesystem?
-    public let restartPolicy: RestartPolicy?
+import Foundation
 
-    public init(autoRemove: Bool, rootFsOverride: Filesystem? = nil, restartPolicy: RestartPolicy? = nil) {
-        self.autoRemove = autoRemove
-        self.rootFsOverride = rootFsOverride
-        self.restartPolicy = restartPolicy
+public struct ContainerEvent: Codable, Sendable, Equatable {
+    public enum Action: String, Codable, Sendable, Equatable {
+        case create
+        case start
+        case stop
+        case die
+        case destroy
     }
 
-    public static let `default` = ContainerCreateOptions(autoRemove: false)
+    public let containerId: String
+    public let action: Action
+    public let timestamp: Date
 
+    public init(containerId: String, action: Action, timestamp: Date = Date()) {
+        self.containerId = containerId
+        self.action = action
+        self.timestamp = timestamp
+    }
 }

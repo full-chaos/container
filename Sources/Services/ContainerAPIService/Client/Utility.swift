@@ -216,7 +216,7 @@ public struct Utility {
                 dnsDomain: containerSystemConfig.dns.domain,
             )
             for attachmentConfiguration in config.networks {
-                let network = try await networkClient.get(id: attachmentConfiguration.network)
+                let network = try await networkClient.getResource(id: attachmentConfiguration.network)
                 guard network.status.phase == "running" else {
                     throw ContainerizationError(.invalidState, message: "network \(attachmentConfiguration.network) is not running")
                 }

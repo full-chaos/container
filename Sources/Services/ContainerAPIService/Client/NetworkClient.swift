@@ -57,11 +57,16 @@ public struct NetworkClient: Sendable {
     }
 
     @discardableResult
-    private func xpcSend(
+    private func xpcSend(message: XPCMessage) async throws -> XPCMessage {
+        try await xpcClient.send(message)
+    }
+
+    @discardableResult
+    private func xpcSendIdempotent(
         message: XPCMessage,
-        timeout: Duration? = XPCClient.xpcRegistrationTimeout
+        timeout: Duration
     ) async throws -> XPCMessage {
-        try await xpcClient.send(message, responseTimeout: timeout)
+        try await xpcClient.send(message, timeoutForIdempotentRequest: timeout)
     }
 
     /// Creates a new network with the given configuration.
@@ -104,7 +109,7 @@ public struct NetworkClient: Sendable {
     public func list() async throws -> [NetworkResource] {
         let request = XPCMessage(route: .networkList)
 
-        let response = try await xpcSend(message: request, timeout: .seconds(1))
+        let response = try await xpcSendIdempotent(message: request, timeout: .seconds(1))
 
         // Prefer current encoding (≥ 0.12.0 server).
         if let resourceData = response.dataNoCopy(key: .networkResources) {
@@ -125,12 +130,21 @@ public struct NetworkClient: Sendable {
     /// - Returns: The ``NetworkResource`` for the matching network.
     /// - Throws: ``ContainerizationError/notFound`` if no network with the given
     ///   identifier exists, or a communication error if the XPC call fails.
-    public func get(id: String) async throws -> NetworkResource {
+    public func getResource(id: String) async throws -> NetworkResource {
         let networks = try await list()
         guard let network = networks.first(where: { $0.id == id }) else {
             throw ContainerizationError(.notFound, message: "network \(id) not found")
         }
         return network
+    }
+
+    /// Returns a compatibility ``NetworkState`` for the given identifier.
+    ///
+    /// Downstream callers that still compile against the pre-0.12.0
+    /// `NetworkState` API use this bridge while newer call sites migrate to
+    /// ``getResource(id:)``.
+    public func get(id: String) async throws -> NetworkState {
+        NetworkState(try await getResource(id: id))
     }
 
     /// Deletes the network with the given identifier.

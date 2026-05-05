@@ -297,6 +297,7 @@ extension APIServer {
             routes[XPCRoute.containerStats] = harness.stats
             routes[XPCRoute.containerDiskUsage] = harness.diskUsage
             routes[XPCRoute.containerExport] = harness.export
+            routes[XPCRoute.containerEvent] = harness.events
 
             return service
         }
