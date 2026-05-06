@@ -19,10 +19,21 @@ public struct ContainerCreateOptions: Codable, Sendable {
     public let autoRemove: Bool
     /// Override the rootFs with this one other than the image-cloned version
     public let rootFsOverride: Filesystem?
+    /// Declarative restart policy recorded at creation time.
+    ///
+    /// Today this is data-shape only — the daemon stores the policy but does
+    /// not observe exits and re-launch automatically. A restart-manager
+    /// follow-up will honor this field at runtime.
+    public let restartPolicy: RestartPolicy?
 
-    public init(autoRemove: Bool, rootFsOverride: Filesystem? = nil) {
+    public init(
+        autoRemove: Bool,
+        rootFsOverride: Filesystem? = nil,
+        restartPolicy: RestartPolicy? = nil
+    ) {
         self.autoRemove = autoRemove
         self.rootFsOverride = rootFsOverride
+        self.restartPolicy = restartPolicy
     }
 
     public static let `default` = ContainerCreateOptions(autoRemove: false)
