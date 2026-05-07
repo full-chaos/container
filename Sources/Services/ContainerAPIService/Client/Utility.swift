@@ -209,7 +209,6 @@ public struct Utility {
                 containerId: config.id,
                 builtinNetworkId: builtinNetworkId,
                 networks: parsedNetworks,
-                dnsDomain: containerSystemConfig.dns.domain,
             )
             for attachmentConfiguration in config.networks {
                 _ = try await networkClient.get(id: attachmentConfiguration.network)
@@ -270,7 +269,6 @@ public struct Utility {
         containerId: String,
         builtinNetworkId: String?,
         networks: [Parser.ParsedNetwork],
-        dnsDomain: String?,
     ) throws -> [AttachmentConfiguration] {
         // Validate MAC addresses if provided
         for network in networks {
@@ -279,19 +277,10 @@ public struct Utility {
             }
         }
 
-        // make an FQDN for the first interface
-        let fqdn: String?
-        if !containerId.contains(".") {
-            // add default domain if it exists, and container ID is unqualified
-            if let dnsDomain {
-                fqdn = "\(containerId).\(dnsDomain)."
-            } else {
-                fqdn = nil
-            }
-        } else {
-            // use container ID directly if fully qualified
-            fqdn = "\(containerId)."
-        }
+        // CHAOS-1478: Always register the bare containerId form.
+        // Trailing dots are stripped defensively; dns.domain suffix is no longer
+        // baked into the registration key — ContainerDNSHandler strips it at query time.
+        let registrationHostname = containerId.hasSuffix(".") ? String(containerId.dropLast()) : containerId
 
         guard networks.isEmpty else {
             // Check if this is only the default network with properties (e.g., MAC address)
@@ -316,7 +305,7 @@ public struct Utility {
                 }
                 return AttachmentConfiguration(
                     network: item.element.name,
-                    options: AttachmentOptions(hostname: fqdn ?? containerId, macAddress: macAddress, mtu: mtu)
+                    options: AttachmentOptions(hostname: registrationHostname, macAddress: macAddress, mtu: mtu)
                 )
             }
         }
@@ -325,7 +314,7 @@ public struct Utility {
         guard let builtinNetworkId else {
             throw ContainerizationError(.invalidState, message: "builtin network is not present")
         }
-        return [AttachmentConfiguration(network: builtinNetworkId, options: AttachmentOptions(hostname: fqdn ?? containerId, macAddress: nil, mtu: 1280))]
+        return [AttachmentConfiguration(network: builtinNetworkId, options: AttachmentOptions(hostname: registrationHostname, macAddress: nil, mtu: 1280))]
     }
 
     private static func getKernel(management: Flags.Management) async throws -> Kernel {
