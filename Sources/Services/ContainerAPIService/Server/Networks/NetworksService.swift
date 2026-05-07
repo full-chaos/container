@@ -367,7 +367,10 @@ public actor NetworksService {
 
     /// Perform a hostname lookup on all networks.
     ///
-    /// - Parameter hostname: A canonical DNS hostname with a trailing dot (e.g. `"example.com."`).
+    /// - Parameter hostname: An allocator hostname key. Trailing root-label dots are stripped at the
+    ///   allocator boundary, so both bare form (`"example"`) and canonical FQDN form (`"example."`)
+    ///   resolve to the same allocation. The configured `dns.domain` suffix, if any, must be stripped
+    ///   by the caller (typically `ContainerDNSHandler`). See CHAOS-1478.
     public func lookup(hostname: String) async throws -> Attachment? {
         try await self.stateLock.withLock { _ in
             for state in await self.serviceStates.values {

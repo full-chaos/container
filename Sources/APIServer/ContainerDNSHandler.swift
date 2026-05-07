@@ -21,10 +21,12 @@ import DNSServer
 /// Handler that uses table lookup to resolve hostnames.
 struct ContainerDNSHandler: DNSHandler {
     private let networkService: NetworksService
+    private let dnsDomain: String?
     private let ttl: UInt32
 
-    public init(networkService: NetworksService, ttl: UInt32 = 5) {
+    public init(networkService: NetworksService, dnsDomain: String? = nil, ttl: UInt32 = 5) {
         self.networkService = networkService
+        self.dnsDomain = dnsDomain
         self.ttl = ttl
     }
 
@@ -75,8 +77,18 @@ struct ContainerDNSHandler: DNSHandler {
         )
     }
 
+    /// Strips the trailing root-label dot and, if configured, the dns.domain suffix
+    /// from a DNS question name to produce the bare allocator key. See CHAOS-1478.
+    private func registrationKey(for questionName: String) -> String {
+        var key = questionName.hasSuffix(".") ? String(questionName.dropLast()) : questionName
+        if let domain = dnsDomain, !domain.isEmpty, key.hasSuffix(".\(domain)") {
+            key = String(key.dropLast(domain.count + 1))
+        }
+        return key
+    }
+
     private func answerHost(question: Question) async throws -> ResourceRecord? {
-        guard let ipAllocation = try await networkService.lookup(hostname: question.name) else {
+        guard let ipAllocation = try await networkService.lookup(hostname: registrationKey(for: question.name)) else {
             return nil
         }
         let ipv4 = ipAllocation.ipv4Address.address.description
@@ -88,7 +100,7 @@ struct ContainerDNSHandler: DNSHandler {
     }
 
     private func answerHost6(question: Question) async throws -> (record: ResourceRecord?, hostnameExists: Bool) {
-        guard let ipAllocation = try await networkService.lookup(hostname: question.name) else {
+        guard let ipAllocation = try await networkService.lookup(hostname: registrationKey(for: question.name)) else {
             return (nil, false)
         }
         guard let ipv6Address = ipAllocation.ipv6Address else {
