@@ -186,7 +186,7 @@ extension Application {
             guard let raw, !raw.isEmpty else { return nil }
             switch raw {
             case "no":
-                return .none
+                return RestartPolicy.none
             case "always":
                 return RestartPolicy(mode: .always)
             case "unless-stopped":
