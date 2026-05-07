@@ -226,6 +226,22 @@ let package = Package(
             ],
             path: "Sources/APIServer"
         ),
+        // APIServer library: pure-logic helpers extracted from the executable
+        // so that unit tests can reach them without importing @main. CHAOS-1478.
+        .target(
+            name: "APIServer",
+            dependencies: [
+                "ContainerAPIService",
+                "DNSServer",
+            ],
+            path: "Sources/APIServerLib"
+        ),
+        .testTarget(
+            name: "APIServerTests",
+            dependencies: [
+                "APIServer"
+            ]
+        ),
         .target(
             name: "ContainerAPIService",
             dependencies: [
