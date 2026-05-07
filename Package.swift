@@ -513,6 +513,7 @@ let package = Package(
                 .product(name: "ContainerizationExtras", package: "containerization"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SystemPackage", package: "swift-system"),
+                .product(name: "TOML", package: "swift-toml"),
                 "ContainerPersistence",
                 "ContainerTestSupport",
             ]
