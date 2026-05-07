@@ -112,7 +112,7 @@ extension APIServer {
 
                     // start up host table DNS
                     group.addTask {
-                        let hostsResolver = ContainerDNSHandler(networkService: networkService)
+                        let hostsResolver = ContainerDNSHandler(networkService: networkService, dnsDomain: containerSystemConfig.dns.domain)
                         let nxDomainResolver = NxDomainResolver()
                         let compositeResolver = CompositeResolver(handlers: [hostsResolver, nxDomainResolver])
                         let hostsQueryValidator = StandardQueryValidator(handler: compositeResolver)

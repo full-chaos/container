@@ -117,15 +117,22 @@ final public class ContainerConfig: Codable, Sendable {
 }
 
 final public class DNSConfig: Codable, Sendable {
+    /// Default DNS suffix used to route container peer-name queries
+    /// through the embedded handler. The matching `/etc/resolver/`
+    /// entry is installed by the macOS package postinstall script
+    /// (see `scripts/pkg-scripts/postinstall`) so peer DNS works in the
+    /// default configuration without any runtime sudo prompt.
+    public static let defaultDomain = "test"
+
     public let domain: String?
 
-    public init(domain: String? = nil) {
+    public init(domain: String? = defaultDomain) {
         self.domain = domain
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.domain = try container.decodeIfPresent(String.self, forKey: .domain)
+        self.domain = try container.decodeIfPresent(String.self, forKey: .domain) ?? Self.defaultDomain
     }
 }
 

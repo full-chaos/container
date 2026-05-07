@@ -28,8 +28,16 @@ actor AttachmentAllocator {
         )
     }
 
+    /// Strips a single trailing root-label dot from a hostname if present.
+    /// This ensures that bare form ("example") and canonical FQDN form ("example.")
+    /// resolve to the same allocation key. See CHAOS-1478.
+    private static func normalize(_ hostname: String) -> String {
+        hostname.hasSuffix(".") ? String(hostname.dropLast()) : hostname
+    }
+
     /// Allocate a network address for a host.
     func allocate(hostname: String) async throws -> UInt32 {
+        let hostname = Self.normalize(hostname)
         // Client is responsible for ensuring two containers don't use same hostname, so provide existing IP if hostname exists
         if let index = hostnames[hostname] {
             return index
@@ -44,6 +52,7 @@ actor AttachmentAllocator {
     /// Free an allocated network address by hostname.
     @discardableResult
     func deallocate(hostname: String) async throws -> UInt32? {
+        let hostname = Self.normalize(hostname)
         guard let index = hostnames.removeValue(forKey: hostname) else {
             return nil
         }
@@ -58,14 +67,18 @@ actor AttachmentAllocator {
     }
 
     /// Retrieve the allocator index for a hostname.
+    /// Both bare form ("example") and canonical FQDN form ("example.") resolve to the same allocation.
     func lookup(hostname: String) async throws -> UInt32? {
-        hostnames[hostname]
+        hostnames[Self.normalize(hostname)]
     }
 
     /// Pre-reserve a hostname-to-address mapping in the allocator's pool.
     /// The address must be within the allocator's range; out-of-range or
     /// already-allocated addresses cause the underlying allocator to throw.
+    /// The hostname is normalized so bare and canonical FQDN forms map to
+    /// the same key, matching `allocate` / `lookup` / `deallocate`.
     func reserveHostname(hostname: String, address: UInt32) async throws {
+        let hostname = Self.normalize(hostname)
         try allocator.reserve(address)
         hostnames[hostname] = address
     }
