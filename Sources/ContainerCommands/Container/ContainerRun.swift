@@ -172,5 +172,23 @@ extension Application {
             }
             throw ArgumentParser.ExitCode(exitCode)
         }
+        static func parseRestartPolicy(_ raw: String?) -> RestartPolicy? {
+            guard let raw, !raw.isEmpty else { return nil }
+            switch raw {
+            case "no":
+                return RestartPolicy.none
+            case "always":
+                return RestartPolicy(mode: .always)
+            case "unless-stopped":
+                return RestartPolicy(mode: .unlessStopped)
+            default:
+                if raw.hasPrefix("on-failure") {
+                    let parts = raw.split(separator: ":", maxSplits: 1)
+                    let retries = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
+                    return RestartPolicy(mode: .onFailure, maxRetries: retries)
+                }
+                return nil
+            }
+        }
     }
 }
