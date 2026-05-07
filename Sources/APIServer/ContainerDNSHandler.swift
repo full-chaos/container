@@ -79,7 +79,8 @@ struct ContainerDNSHandler: DNSHandler {
 
     /// Strips the trailing root-label dot and, if configured, the dns.domain suffix
     /// from a DNS question name to produce the bare allocator key. See CHAOS-1478.
-    private func registrationKey(for questionName: String) -> String {
+    // internal for testing — see APIServerTests/ContainerDNSHandlerRegistrationKeyTest.swift (CHAOS-1478)
+    internal func registrationKey(for questionName: String) -> String {
         var key = questionName.hasSuffix(".") ? String(questionName.dropLast()) : questionName
         if let domain = dnsDomain, !domain.isEmpty, key.hasSuffix(".\(domain)") {
             key = String(key.dropLast(domain.count + 1))

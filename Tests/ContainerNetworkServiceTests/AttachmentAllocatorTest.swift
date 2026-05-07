@@ -205,3 +205,72 @@ struct AttachmentAllocatorTest {
         #expect(secondDeallocate == nil)
     }
 }
+
+// MARK: - CHAOS-1478 normalization tests
+
+extension AttachmentAllocatorTest {
+    /// allocate("foo") then lookup("foo.") must return the same index.
+    @Test func testAllocateBareLookupCanonicalReturnsSameIndex() async throws {
+        let allocator = try AttachmentAllocator(lower: 100, size: 10)
+
+        let allocated = try await allocator.allocate(hostname: "foo")
+        let lookedUp = try await allocator.lookup(hostname: "foo.")
+
+        #expect(lookedUp == allocated)
+    }
+
+    /// allocate("foo.") then lookup("foo") must return the same index.
+    @Test func testAllocateCanonicalLookupBareReturnsSameIndex() async throws {
+        let allocator = try AttachmentAllocator(lower: 100, size: 10)
+
+        let allocated = try await allocator.allocate(hostname: "foo.")
+        let lookedUp = try await allocator.lookup(hostname: "foo")
+
+        #expect(lookedUp == allocated)
+    }
+
+    /// Calling allocate twice with "foo" then "foo." must return the SAME index.
+    @Test func testAllocateBareThenCanonicalIsIdempotent() async throws {
+        let allocator = try AttachmentAllocator(lower: 100, size: 10)
+
+        let first = try await allocator.allocate(hostname: "foo")
+        let second = try await allocator.allocate(hostname: "foo.")
+
+        #expect(first == second)
+    }
+
+    /// allocate("foo") then deallocate("foo.") must return the index;
+    /// subsequent lookup of either form must return nil.
+    @Test func testDeallocateCanonicalRemovesBareEntry() async throws {
+        let allocator = try AttachmentAllocator(lower: 100, size: 10)
+
+        let allocated = try await allocator.allocate(hostname: "foo")
+        let deallocated = try await allocator.deallocate(hostname: "foo.")
+
+        #expect(deallocated == allocated)
+        #expect(try await allocator.lookup(hostname: "foo") == nil)
+        #expect(try await allocator.lookup(hostname: "foo.") == nil)
+    }
+
+    /// normalize() strips exactly ONE trailing dot.
+    /// Multi-dot inputs ("foo..") are NOT equivalent to the bare form ("foo").
+    /// They ARE equivalent to the single-dot canonical form ("foo.") because
+    /// normalize("foo..") == "foo." and normalize("foo.") == "foo.".
+    @Test func testNormalizationIsSingleDot() async throws {
+        let allocator = try AttachmentAllocator(lower: 100, size: 10)
+
+        // Allocate with double-dot form: normalize("foo..") → "foo." is stored.
+        let allocated = try await allocator.allocate(hostname: "foo..")
+
+        // lookup("foo..") normalises to "foo." → finds the entry (same key).
+        let lookedUpDoubleDot = try await allocator.lookup(hostname: "foo..")
+        #expect(lookedUpDoubleDot == allocated)
+
+        // lookup("foo.") normalises to "foo" → does NOT find "foo." → nil.
+        // This confirms "foo.." is NOT equivalent to the bare form.
+        #expect(try await allocator.lookup(hostname: "foo.") == nil)
+
+        // lookup("foo") normalises to "foo" → also not found.
+        #expect(try await allocator.lookup(hostname: "foo") == nil)
+}
+}  // extension AttachmentAllocatorTest
