@@ -156,6 +156,7 @@ let package = Package(
                 .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SystemPackage", package: "swift-system"),
+                "APIServerCore",
                 "ContainerAPIService",
                 "ContainerAPIClient",
                 "ContainerLog",
@@ -170,20 +171,20 @@ let package = Package(
             ],
             path: "Sources/APIServer"
         ),
-        // APIServer library: pure-logic helpers extracted from the executable
-        // so that unit tests can reach them without importing @main. CHAOS-1478.
+        // APIServerCore: pure-logic helpers extracted from the container-apiserver
+        // executable so that unit tests can reach them without importing @main. CHAOS-1478.
         .target(
-            name: "APIServer",
+            name: "APIServerCore",
             dependencies: [
                 "ContainerAPIService",
                 "DNSServer",
             ],
-            path: "Sources/APIServerLib"
+            path: "Sources/APIServerCore"
         ),
         .testTarget(
             name: "APIServerTests",
             dependencies: [
-                "APIServer"
+                "APIServerCore"
             ]
         ),
         .target(

@@ -14,14 +14,14 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-// Judgment call: `container-apiserver` is an executable target with `@main`
-// and cannot be imported by test targets.  The `registrationKey` logic was
-// therefore extracted to `DNSRegistrationKey` in the `APIServer` library
-// target (`Sources/APIServerLib/`), which `ContainerDNSHandler` delegates to.
-// These tests exercise `DNSRegistrationKey.registrationKey(for:dnsDomain:)`
-// directly, which is the canonical implementation of the CHAOS-1478 fix.
-
-@testable import APIServer
+// `container-apiserver` is an executable target with `@main` and cannot be imported
+// by test targets. The `registrationKey` logic was therefore extracted to
+// `DNSRegistrationKey` in the `APIServerCore` library target
+// (`Sources/APIServerCore/`), which `ContainerDNSHandler.answerHost` and
+// `answerHost6` delegate to. These tests exercise
+// `DNSRegistrationKey.registrationKey(for:dnsDomain:)` directly — the canonical
+// implementation of the CHAOS-1478 fix.
+@testable import APIServerCore
 import Testing
 
 struct ContainerDNSHandlerRegistrationKeyTest {

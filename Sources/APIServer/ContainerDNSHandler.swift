@@ -14,6 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
+import APIServerCore
 import ContainerAPIService
 import ContainerizationExtras
 import DNSServer
@@ -77,19 +78,9 @@ struct ContainerDNSHandler: DNSHandler {
         )
     }
 
-    /// Strips the trailing root-label dot and, if configured, the dns.domain suffix
-    /// from a DNS question name to produce the bare allocator key. See CHAOS-1478.
-    // internal for testing — see APIServerTests/ContainerDNSHandlerRegistrationKeyTest.swift (CHAOS-1478)
-    internal func registrationKey(for questionName: String) -> String {
-        var key = questionName.hasSuffix(".") ? String(questionName.dropLast()) : questionName
-        if let domain = dnsDomain, !domain.isEmpty, key.hasSuffix(".\(domain)") {
-            key = String(key.dropLast(domain.count + 1))
-        }
-        return key
-    }
-
     private func answerHost(question: Question) async throws -> ResourceRecord? {
-        guard let ipAllocation = try await networkService.lookup(hostname: registrationKey(for: question.name)) else {
+        let key = DNSRegistrationKey.registrationKey(for: question.name, dnsDomain: dnsDomain)
+        guard let ipAllocation = try await networkService.lookup(hostname: key) else {
             return nil
         }
         let ipv4 = ipAllocation.ipv4Address.address.description
@@ -101,7 +92,8 @@ struct ContainerDNSHandler: DNSHandler {
     }
 
     private func answerHost6(question: Question) async throws -> (record: ResourceRecord?, hostnameExists: Bool) {
-        guard let ipAllocation = try await networkService.lookup(hostname: registrationKey(for: question.name)) else {
+        let key = DNSRegistrationKey.registrationKey(for: question.name, dnsDomain: dnsDomain)
+        guard let ipAllocation = try await networkService.lookup(hostname: key) else {
             return (nil, false)
         }
         guard let ipv6Address = ipAllocation.ipv6Address else {
