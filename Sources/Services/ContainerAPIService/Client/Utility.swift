@@ -297,16 +297,11 @@ public struct Utility {
                 }
             }
 
-            // attach the first network using the fqdn, and the rest using just the container ID
+            // Register the bare-form hostname on every network attachment; allocator-side
+            // normalization makes trailing-dot input irrelevant. See CHAOS-1478.
             return try networks.enumerated().map { item in
                 let macAddress = try item.element.macAddress.map { try MACAddress($0) }
                 let mtu = item.element.mtu ?? 1280
-                guard item.offset == 0 else {
-                    return AttachmentConfiguration(
-                        network: item.element.name,
-                        options: AttachmentOptions(hostname: containerId, macAddress: macAddress, mtu: mtu)
-                    )
-                }
                 return AttachmentConfiguration(
                     network: item.element.name,
                     options: AttachmentOptions(hostname: registrationHostname, macAddress: macAddress, mtu: mtu)
