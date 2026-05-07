@@ -434,6 +434,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SystemPackage", package: "swift-system"),
+                .product(name: "TOML", package: "swift-toml"),
                 "ContainerPersistence",
                 "ContainerTestSupport",
             ]

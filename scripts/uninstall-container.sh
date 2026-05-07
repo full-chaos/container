@@ -80,6 +80,14 @@ for ((i=${#DIRS[@]}-1; i>=0; i--)); do
 done
 
 sudo pkgutil --forget com.apple.container-installer > /dev/null
+
+# Remove the /etc/resolver/ entry installed by scripts/pkg-scripts/postinstall (CHAOS-1478).
+# Best-effort: missing file is fine; mDNSResponder reload is best-effort too.
+if [ -f /etc/resolver/containerization.test ]; then
+    sudo rm -f /etc/resolver/containerization.test
+    sudo killall -HUP mDNSResponder 2>/dev/null || true
+fi
+
 echo 'Removed `container` tool and helpers'
 
 if [ "$DELETE_DATA" = true ]; then

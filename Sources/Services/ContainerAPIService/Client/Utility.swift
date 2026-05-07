@@ -226,10 +226,21 @@ public struct Utility {
             config.dns = nil
         } else {
             let domain = management.dns.domain ?? containerSystemConfig.dns.domain
+            // Auto-inject the configured DNS domain as a search-domain when
+            // the user has not specified any. This is what makes bare-name
+            // peer queries (e.g. `nslookup probe-pg`) hit the embedded DNS
+            // handler in the default configuration: glibc/musl appends the
+            // search suffix, the FQDN flows through vmnet's DNS proxy to the
+            // host system resolver, and the matching `/etc/resolver/`
+            // entry routes it to `127.0.0.1:2053`. See CHAOS-1478.
+            var searchDomains = management.dns.searchDomains
+            if searchDomains.isEmpty, let domain, !domain.isEmpty {
+                searchDomains = [domain]
+            }
             config.dns = .init(
                 nameservers: management.dns.nameservers,
                 domain: domain,
-                searchDomains: management.dns.searchDomains,
+                searchDomains: searchDomains,
                 options: management.dns.options
             )
         }
