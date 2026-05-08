@@ -25,6 +25,7 @@ import ContainerXPC
 import Containerization
 import Foundation
 import Logging
+import SystemPackage
 
 @main
 struct ImagesHelper: AsyncParsableCommand {
@@ -94,7 +95,7 @@ extension ImagesHelper {
             let contentStore = RemoteContentStoreClient()
             let imageStore = try ImageStore(path: root, contentStore: contentStore)
             let unpackStrategy = SnapshotStore.defaultUnpackStrategy(initImage: containerSystemConfig.vminit.image)
-            let snapshotStore = try SnapshotStore(path: root, unpackStrategy: unpackStrategy, log: log)
+            let snapshotStore = try SnapshotStore(path: FilePath(root.absolutePath()), unpackStrategy: unpackStrategy, log: log)
             let service = try ImagesService(contentStore: contentStore, imageStore: imageStore, snapshotStore: snapshotStore, log: log)
             let harness = ImagesServiceHarness(service: service, log: log)
 
