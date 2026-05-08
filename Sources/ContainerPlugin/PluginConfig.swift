@@ -16,6 +16,7 @@
 
 //
 import Foundation
+import SystemPackage
 import TOML
 
 /// PluginConfig details all of the fields to describe and register a plugin.
@@ -109,17 +110,17 @@ extension PluginConfig {
 extension PluginConfig {
     /// Initialize from a config file, selecting the decoder based on file extension.
     /// Supports `.toml` (via TOMLDecoder) and `.json` (via JSONDecoder).
-    public init?(configURL: URL) throws {
+    public init?(configPath: FilePath) throws {
         let fm = FileManager.default
-        if !fm.fileExists(atPath: configURL.path) {
+        if !fm.fileExists(atPath: configPath.string) {
             return nil
         }
 
-        guard let data = fm.contents(atPath: configURL.path) else {
+        guard let data = fm.contents(atPath: configPath.string) else {
             return nil
         }
 
-        switch configURL.pathExtension {
+        switch configPath.extension {
         case "toml":
             guard let content = String(data: data, encoding: .utf8) else {
                 return nil
