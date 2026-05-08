@@ -20,6 +20,7 @@ import ContainerSandboxServiceClient
 import Containerization
 // import ContainerizationOCI
 import Foundation
+import SystemPackage
 import Testing
 
 /// Unit tests for RuntimeConfiguration functionality.
@@ -32,8 +33,9 @@ struct RuntimeConfigurationTests {
     /// appropriate error
     @Test
     func testReadNonExistentRuntimeConfiguration() throws {
-        let tempDir = FileManager.default.temporaryDirectory
-        let nonExistentPath = tempDir.appendingPathComponent("non-existent-\(UUID()).json")
+        let tempURL = FileManager.default.temporaryDirectory
+        let nonExistentPath = FilePath(tempURL.path(percentEncoded: false))
+            .appending("non-existent-\(UUID()).json")
 
         #expect(throws: Error.self) {
             _ = try RuntimeConfiguration.readRuntimeConfiguration(from: nonExistentPath)
@@ -43,11 +45,12 @@ struct RuntimeConfigurationTests {
     /// Test that runtime configuration reads and writes as expected
     @Test
     func testRuntimeConfigurationReadWrite() throws {
-        let tempDir = FileManager.default.temporaryDirectory
-        let bundlePath = tempDir.appendingPathComponent("test-bundle-\(UUID())")
+        let bundleURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-bundle-\(UUID())")
+        let bundlePath = FilePath(bundleURL.path(percentEncoded: false))
 
         defer {
-            try? FileManager.default.removeItem(at: bundlePath)
+            try? FileManager.default.removeItem(at: bundleURL)
         }
 
         let initFs = Filesystem.virtiofs(
@@ -73,7 +76,8 @@ struct RuntimeConfigurationTests {
         try runtimeConfig.writeRuntimeConfiguration()
 
         defer {
-            try? FileManager.default.removeItem(at: runtimeConfig.runtimeConfigurationPath)
+            try? FileManager.default.removeItem(
+                atPath: runtimeConfig.runtimeConfigurationPath.string)
         }
 
         let readRuntimeConfig = try RuntimeConfiguration.readRuntimeConfiguration(from: bundlePath)
