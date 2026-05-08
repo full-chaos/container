@@ -18,11 +18,12 @@ import ContainerResource
 import Containerization
 import ContainerizationError
 import Foundation
+import SystemPackage
 
 public struct RuntimeConfiguration: Codable, Sendable {
     static let runtimeConfigurationFilename = "runtime-configuration.json"
 
-    public let path: URL
+    public let path: FilePath
     // TODO: Remove runtime-specific fields (initialFilesystem, kernel, containerRootFilesystem).
     // These should be encoded into the opaque `runtimeData` field by the CLI.
     public let initialFilesystem: Filesystem
@@ -33,7 +34,7 @@ public struct RuntimeConfiguration: Codable, Sendable {
     public let runtimeData: Data?
 
     public init(
-        path: URL,
+        path: FilePath,
         initialFilesystem: Filesystem,
         kernel: Kernel,
         containerConfiguration: ContainerConfiguration? = nil,
@@ -50,28 +51,31 @@ public struct RuntimeConfiguration: Codable, Sendable {
         self.runtimeData = runtimeData
     }
 
-    public var runtimeConfigurationPath: URL {
-        self.path.appendingPathComponent(Self.runtimeConfigurationFilename)
+    public var runtimeConfigurationPath: FilePath {
+        self.path.appending(Self.runtimeConfigurationFilename)
     }
 
     public func writeRuntimeConfiguration() throws {
         // Ensure the parent directory exists
-        let directory = self.runtimeConfigurationPath.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: self.path.string, withIntermediateDirectories: true)
 
         let data = try JSONEncoder().encode(self)
-        try data.write(to: self.runtimeConfigurationPath)
+        try data.write(to: URL(fileURLWithPath: self.runtimeConfigurationPath.string))
     }
 
-    public static func readRuntimeConfiguration(from runtimeConfigurationPath: URL) throws -> RuntimeConfiguration {
-        let configurationPath = runtimeConfigurationPath.appendingPathComponent(RuntimeConfiguration.runtimeConfigurationFilename)
-        let data: Data
-        do {
-            data = try Data(contentsOf: configurationPath)
-        } catch {
+    public static func readRuntimeConfiguration(from runtimeConfigurationPath: FilePath) throws -> RuntimeConfiguration {
+        let configurationPath = runtimeConfigurationPath.appending(RuntimeConfiguration.runtimeConfigurationFilename)
+        guard FileManager.default.fileExists(atPath: configurationPath.string) else {
             throw ContainerizationError(
                 .notFound,
-                message: "runtime configuration file not found at path: \(configurationPath.path)"
+                message: "runtime configuration file not found at path: \(configurationPath.string)"
+            )
+        }
+
+        guard let data = FileManager.default.contents(atPath: configurationPath.string) else {
+            throw ContainerizationError(
+                .internalError,
+                message: "failed to read runtime configuration file at path: \(configurationPath.string)"
             )
         }
         return try JSONDecoder().decode(RuntimeConfiguration.self, from: data)
