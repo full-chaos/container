@@ -46,6 +46,47 @@ public struct RuntimeConfiguration: Codable, Sendable {
         self.options = options
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case initialFilesystem
+        case kernel
+        case containerConfiguration
+        case containerRootFilesystem
+        case options
+    }
+
+    // FilePath's default Codable encoding exposes its internal _storage and
+    // is not interchangeable with URL's plain-string form. To stay
+    // wire-compatible with runtime-configuration.json files written before
+    // the URL → FilePath migration, encode `path` as a plain string and
+    // accept either the file:// URL form or a bare path on decode.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let pathString = try container.decode(String.self, forKey: .path)
+        if pathString.hasPrefix("file://"),
+            let url = URL(string: pathString), url.isFileURL
+        {
+            self.path = FilePath(url.path(percentEncoded: false))
+        } else {
+            self.path = FilePath(pathString)
+        }
+        self.initialFilesystem = try container.decode(Filesystem.self, forKey: .initialFilesystem)
+        self.kernel = try container.decode(Kernel.self, forKey: .kernel)
+        self.containerConfiguration = try container.decodeIfPresent(ContainerConfiguration.self, forKey: .containerConfiguration)
+        self.containerRootFilesystem = try container.decodeIfPresent(Filesystem.self, forKey: .containerRootFilesystem)
+        self.options = try container.decodeIfPresent(ContainerCreateOptions.self, forKey: .options)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.path.string, forKey: .path)
+        try container.encode(self.initialFilesystem, forKey: .initialFilesystem)
+        try container.encode(self.kernel, forKey: .kernel)
+        try container.encodeIfPresent(self.containerConfiguration, forKey: .containerConfiguration)
+        try container.encodeIfPresent(self.containerRootFilesystem, forKey: .containerRootFilesystem)
+        try container.encodeIfPresent(self.options, forKey: .options)
+    }
+
     public var runtimeConfigurationPath: FilePath {
         self.path.appending(Self.runtimeConfigurationFilename)
     }
@@ -67,12 +108,7 @@ public struct RuntimeConfiguration: Codable, Sendable {
             )
         }
 
-        guard let data = FileManager.default.contents(atPath: configurationPath.string) else {
-            throw ContainerizationError(
-                .internalError,
-                message: "failed to read runtime configuration file at path: \(configurationPath.string)"
-            )
-        }
+        let data = try Data(contentsOf: URL(fileURLWithPath: configurationPath.string))
         return try JSONDecoder().decode(RuntimeConfiguration.self, from: data)
     }
 }

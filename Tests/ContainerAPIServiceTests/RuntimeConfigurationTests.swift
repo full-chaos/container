@@ -101,4 +101,28 @@ struct RuntimeConfigurationTests {
             readRuntimeConfig.options == nil,
             "Options should be nil")
     }
+
+    /// Verify that runtime-configuration.json files written before the
+    /// URL → FilePath migration (where `path` was a URL absoluteString
+    /// like "file:///foo/bar") still decode correctly. Otherwise an upgrade
+    /// would render existing containers unstartable.
+    @Test
+    func testRuntimeConfigurationDecodesLegacyURLPathFormat() throws {
+        let kernel = Kernel(path: URL(fileURLWithPath: "/path/to/kernel"), platform: .linuxArm)
+        let initFs = Filesystem.virtiofs(source: "/path/to/initfs", destination: "/", options: ["ro"])
+
+        let kernelJSON = try String(data: JSONEncoder().encode(kernel), encoding: .utf8) ?? ""
+        let initFsJSON = try String(data: JSONEncoder().encode(initFs), encoding: .utf8) ?? ""
+
+        let legacyJSON = """
+            {"path":"file:///tmp/legacy-bundle","initialFilesystem":\(initFsJSON),"kernel":\(kernelJSON)}
+            """
+        let data = Data(legacyJSON.utf8)
+
+        let decoded = try JSONDecoder().decode(RuntimeConfiguration.self, from: data)
+
+        #expect(decoded.path == FilePath("/tmp/legacy-bundle"))
+        #expect(decoded.kernel.path == kernel.path)
+        #expect(decoded.initialFilesystem.source == initFs.source)
+    }
 }
