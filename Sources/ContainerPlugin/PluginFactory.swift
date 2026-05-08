@@ -16,6 +16,7 @@
 
 import Foundation
 import Logging
+import SystemPackage
 
 /// Describes the configuration and binary file locations for a plugin.
 public protocol PluginFactory: Sendable {
@@ -35,8 +36,8 @@ public struct DefaultPluginFactory: PluginFactory {
         self.logger = logger
     }
 
-    /// Returns the URL of the first config file found in `directory`, preferring TOML over JSON.
-    static func findConfigURL(in directory: URL, logger: Logger) -> URL? {
+    /// Returns the path of the first config file found in `directory`, preferring TOML over JSON.
+    static func findConfigPath(in directory: URL, logger: Logger) -> FilePath? {
         let fm = FileManager.default
         for filename in configFilenames {
             let url = directory.appending(path: filename)
@@ -47,7 +48,7 @@ public struct DefaultPluginFactory: PluginFactory {
                         metadata: ["path": "\(url.path)"]
                     )
                 }
-                return url
+                return FilePath(url.path)
             }
         }
         return nil
@@ -56,11 +57,11 @@ public struct DefaultPluginFactory: PluginFactory {
     public func create(installURL: URL) throws -> Plugin? {
         let fm = FileManager.default
 
-        guard let configURL = Self.findConfigURL(in: installURL, logger: logger) else {
+        guard let configPath = Self.findConfigPath(in: installURL, logger: logger) else {
             return nil
         }
 
-        guard let config = try PluginConfig(configURL: configURL) else {
+        guard let config = try PluginConfig(configPath: configPath) else {
             return nil
         }
 
@@ -99,11 +100,11 @@ public struct AppBundlePluginFactory: PluginFactory {
             .appending(path: "Contents")
             .appending(path: "Resources")
 
-        guard let configURL = DefaultPluginFactory.findConfigURL(in: contentResources, logger: logger) else {
+        guard let configPath = DefaultPluginFactory.findConfigPath(in: contentResources, logger: logger) else {
             return nil
         }
 
-        guard let config = try PluginConfig(configURL: configURL) else {
+        guard let config = try PluginConfig(configPath: configPath) else {
             return nil
         }
 

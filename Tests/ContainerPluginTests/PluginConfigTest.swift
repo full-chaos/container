@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import SystemPackage
 import Testing
 
 @testable import ContainerPlugin
@@ -35,7 +36,8 @@ struct PluginConfigTest {
             author = "Apple"
             """
         try configToml.write(to: configURL, atomically: true, encoding: .utf8)
-        let config = try #require(try PluginConfig(configURL: configURL))
+        let configPath = FilePath(configURL.path)
+        let config = try #require(try PluginConfig(configPath: configPath))
 
         #expect(config.isCLI)
         #expect(config.abstract == "Default network management service")
@@ -67,7 +69,8 @@ struct PluginConfigTest {
             description = "foo"
             """
         try configToml.write(to: configURL, atomically: true, encoding: .utf8)
-        let config = try #require(try PluginConfig(configURL: configURL))
+        let configPath = FilePath(configURL.path)
+        let config = try #require(try PluginConfig(configPath: configPath))
 
         #expect(!config.isCLI)
         #expect(config.abstract == "Default network management service")
@@ -97,8 +100,9 @@ struct PluginConfigTest {
             [invalid
             """
         try malformedToml.write(to: configURL, atomically: true, encoding: .utf8)
+        let configPath = FilePath(configURL.path)
         #expect(throws: (any Error).self) {
-            try PluginConfig(configURL: configURL)
+            try PluginConfig(configPath: configPath)
         }
     }
 
@@ -117,7 +121,8 @@ struct PluginConfigTest {
             author: "Apple"
             """
         try content.write(to: configURL, atomically: true, encoding: .utf8)
-        let config = try PluginConfig(configURL: configURL)
+        let configPath = FilePath(configURL.path)
+        let config = try PluginConfig(configPath: configPath)
         #expect(config == nil)
     }
 }
