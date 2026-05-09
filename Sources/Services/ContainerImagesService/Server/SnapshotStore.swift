@@ -220,7 +220,7 @@ extension FileManager {
         var size: UInt64 = 0
         let resourceKeys: [URLResourceKey] = [.totalFileAllocatedSizeKey]
 
-        // URL boundary: URLResourceKey.totalFileAllocatedSizeKey is a Foundation API
+        // URL boundary: required by URLEnumerator API; no FilePath equivalent
         let dirURL = URL(fileURLWithPath: dir.string, isDirectory: true)
         guard
             let enumerator = self.enumerator(
