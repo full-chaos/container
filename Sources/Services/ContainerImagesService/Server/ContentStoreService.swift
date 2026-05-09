@@ -19,20 +19,22 @@ import Containerization
 import ContainerizationOCI
 import Foundation
 import Logging
+import SystemPackage
 
 public actor ContentStoreService {
     private let log: Logger
     private let contentStore: LocalContentStore
-    private let root: URL
+    private let root: FilePath
 
-    public init(root: URL, log: Logger) throws {
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        self.root = root.appendingPathComponent("content")
-        self.contentStore = try LocalContentStore(path: self.root)
+    public init(root: FilePath, log: Logger) throws {
+        try FileManager.default.createDirectory(atPath: root.string, withIntermediateDirectories: true)
+        self.root = root.appending("content")
+        // LocalContentStore is defined upstream in Containerization and only accepts URL.
+        self.contentStore = try LocalContentStore(path: URL(filePath: self.root.string))
         self.log = log
     }
 
-    public func get(digest: String) async throws -> URL? {
+    public func get(digest: String) async throws -> FilePath? {
         self.log.trace(
             "ContentStoreService: enter",
             metadata: [
@@ -50,7 +52,10 @@ public actor ContentStoreService {
             )
         }
 
-        return try await self.contentStore.get(digest: digest)?.path
+        guard let url = try await self.contentStore.get(digest: digest)?.path else {
+            return nil
+        }
+        return FilePath(url.path(percentEncoded: false))
     }
 
     @discardableResult
@@ -97,7 +102,7 @@ public actor ContentStoreService {
         return try await self.contentStore.delete(keeping: keeping)
     }
 
-    public func newIngestSession() async throws -> (id: String, ingestDir: URL) {
+    public func newIngestSession() async throws -> (id: String, ingestDir: FilePath) {
         self.log.debug(
             "ContentStoreService: enter",
             metadata: [
@@ -112,7 +117,8 @@ public actor ContentStoreService {
                 ]
             )
         }
-        return try await self.contentStore.newIngestSession()
+        let session = try await self.contentStore.newIngestSession()
+        return (session.id, FilePath(session.ingestDir.path(percentEncoded: false)))
     }
 
     public func completeIngestSession(_ id: String) async throws -> [String] {

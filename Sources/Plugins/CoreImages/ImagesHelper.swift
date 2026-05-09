@@ -25,6 +25,7 @@ import ContainerXPC
 import Containerization
 import Foundation
 import Logging
+import SystemPackage
 
 @main
 struct ImagesHelper: AsyncParsableCommand {
@@ -113,7 +114,7 @@ extension ImagesHelper {
         }
 
         private func initializeContentService(root: URL, log: Logger, routes: inout [String: XPCServer.RouteHandler]) throws {
-            let service = try ContentStoreService(root: root, log: log)
+            let service = try ContentStoreService(root: FilePath(root.path(percentEncoded: false)), log: log)
             let harness = ContentServiceHarness(service: service, log: log)
 
             routes[ImagesServiceXPCRoute.contentClean.rawValue] = XPCServer.route(harness.clean)
