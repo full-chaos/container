@@ -121,9 +121,7 @@ extension ImagesHelper {
         }
 
         private func initializeContentService(root: FilePath, log: Logger, routes: inout [String: XPCServer.RouteHandler]) throws {
-            // TODO: remove as part of ImageStore URL removal PR
-            let rootURL = URL(fileURLWithPath: root.string)
-            let service = try ContentStoreService(root: rootURL, log: log)
+            let service = try ContentStoreService(root: root, log: log)
             let harness = ContentServiceHarness(service: service, log: log)
 
             routes[ImagesServiceXPCRoute.contentClean.rawValue] = XPCServer.route(harness.clean)
