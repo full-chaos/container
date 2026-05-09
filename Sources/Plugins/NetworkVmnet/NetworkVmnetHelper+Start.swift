@@ -66,6 +66,21 @@ extension NetworkVmnetHelper {
             return .reserved
         }()
 
+        @Option(name: .customLong("gateway"), help: "Explicit IPv4 gateway address (optional; default derived from subnet)")
+        var ipv4Gateway: String?
+
+        @Option(name: .customLong("ip-range"), help: "Sub-CIDR of subnet from which dynamic IPv4 addresses are allocated")
+        var ipv4Range: String?
+
+        @Option(name: .customLong("aux-addresses"), help: "JSON-encoded hostname-to-IPv4 reservations")
+        var auxAddressesJSON: String?
+
+        @Option(name: .customLong("driver-opt"), help: "Free-form driver option (KEY=VALUE), repeatable")
+        var driverOpts: [String] = []
+
+        @Flag(name: .customLong("ipv6"), help: "Enable IPv6 even when no IPv6 subnet is supplied")
+        var enableIPv6 = false
+
         var logRoot = LogRoot.path
 
         func run() async throws {
@@ -81,6 +96,25 @@ extension NetworkVmnetHelper {
                 log.info("configuring XPC server")
                 let ipv4Subnet = try self.ipv4Subnet.map { try CIDRv4($0) }
                 let ipv6Subnet = try self.ipv6Subnet.map { try CIDRv6($0) }
+                let ipv4Gateway = try self.ipv4Gateway.map { try IPv4Address($0) }
+                let ipv4Range = try self.ipv4Range.map { try CIDRv4($0) }
+                let auxAddresses = try Self.decodeAuxAddresses(self.auxAddressesJSON)
+                let parsedDriverOpts: [String: String]?
+                if driverOpts.isEmpty {
+                    parsedDriverOpts = nil
+                } else {
+                    var collected: [String: String] = [:]
+                    collected.reserveCapacity(driverOpts.count)
+                    for entry in driverOpts {
+                        guard let separatorIndex = entry.firstIndex(of: "=") else {
+                            throw ContainerizationError(.invalidArgument, message: "driver option '\(entry)' is missing '='")
+                        }
+                        let key = String(entry[..<separatorIndex])
+                        let value = String(entry[entry.index(after: separatorIndex)...])
+                        collected[key] = value
+                    }
+                    parsedDriverOpts = collected
+                }
                 let pluginInfo = NetworkPluginInfo(
                     plugin: NetworkVmnetHelper._commandName,
                     variant: self.variant.rawValue
@@ -91,6 +125,12 @@ extension NetworkVmnetHelper {
                     mode: mode,
                     ipv4Subnet: ipv4Subnet,
                     ipv6Subnet: ipv6Subnet,
+                    ipv4Gateway: ipv4Gateway,
+                    ipv4Range: ipv4Range,
+                    auxAddresses: auxAddresses,
+                    driverOpts: parsedDriverOpts,
+                    attachable: nil,
+                    enableIPv6: (self.enableIPv6 || ipv6Subnet != nil) ? true : nil,
                     pluginInfo: pluginInfo
                 )
                 let network = try Self.createNetwork(
@@ -138,6 +178,20 @@ extension NetworkVmnetHelper {
                 }
                 return try ReservedVmnetNetwork(configuration: configuration, log: log)
             }
+        }
+
+        private static func decodeAuxAddresses(_ jsonText: String?) throws -> [String: IPv4Address]? {
+            guard let jsonText, !jsonText.isEmpty else { return nil }
+            guard let data = jsonText.data(using: .utf8) else {
+                throw ContainerizationError(.invalidArgument, message: "aux-addresses payload is not valid UTF-8")
+            }
+            let raw = try JSONDecoder().decode([String: String].self, from: data)
+            var decoded: [String: IPv4Address] = [:]
+            decoded.reserveCapacity(raw.count)
+            for (hostname, addressText) in raw {
+                decoded[hostname] = try IPv4Address(addressText)
+            }
+            return decoded
         }
     }
 }
