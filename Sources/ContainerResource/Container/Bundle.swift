@@ -17,6 +17,7 @@
 import Containerization
 import ContainerizationError
 import Foundation
+import SystemPackage
 
 public struct Bundle: Sendable {
     private static let initfsFilename = "initfs.ext4"
@@ -28,27 +29,28 @@ public struct Bundle: Sendable {
     static let containerConfigFilename = "config.json"
 
     /// The path to the bundle.
-    public let path: URL
+    public let path: FilePath
 
-    public init(path: URL) {
+    public init(path: FilePath) {
         self.path = path
     }
 
-    public var bootlog: URL {
-        self.path.appendingPathComponent("vminitd.log")
+    public var bootlog: FilePath {
+        self.path.appending("vminitd.log")
     }
 
-    public var containerRootfsBlock: URL {
-        self.path.appendingPathComponent(Self.containerRootFsBlockFilename)
+    public var containerRootfsBlock: FilePath {
+        self.path.appending(Self.containerRootFsBlockFilename)
     }
 
-    private var containerRootfsConfig: URL {
-        self.path.appendingPathComponent(Self.containerRootFsFilename)
+    private var containerRootfsConfig: FilePath {
+        self.path.appending(Self.containerRootFsFilename)
     }
 
     public var containerRootfs: Filesystem {
         get throws {
-            let data = try Data(contentsOf: containerRootfsConfig)
+            // Foundation's `Data(contentsOf:)` only accepts `URL`, so bridge here.
+            let data = try Data(contentsOf: URL(filePath: containerRootfsConfig.string))
             let fs = try JSONDecoder().decode(Filesystem.self, from: data)
             return fs
         }
@@ -58,7 +60,7 @@ public struct Bundle: Sendable {
     public var initialFilesystem: Filesystem {
         .block(
             format: "ext4",
-            source: self.path.appendingPathComponent(Self.initfsFilename).path,
+            source: self.path.appending(Self.initfsFilename).string,
             destination: "/",
             options: ["ro"]
         )
@@ -66,32 +68,33 @@ public struct Bundle: Sendable {
 
     public var kernel: Kernel {
         get throws {
-            try load(path: self.path.appendingPathComponent(Self.kernelFilename))
+            try load(path: self.path.appending(Self.kernelFilename))
         }
     }
 
     public var configuration: ContainerConfiguration {
         get throws {
-            try load(path: self.path.appendingPathComponent(Self.containerConfigFilename))
+            try load(path: self.path.appending(Self.containerConfigFilename))
         }
     }
 }
 
 extension Bundle {
     public static func create(
-        path: URL,
+        path: FilePath,
         initialFilesystem: Filesystem,
         kernel: Kernel,
         containerConfiguration: ContainerConfiguration? = nil,
         containerRootFilesystem: Filesystem? = nil,
         options: ContainerCreateOptions? = nil
     ) throws -> Bundle {
-        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-        let kbin = path.appendingPathComponent(Self.kernelBinaryFilename)
-        try FileManager.default.copyItem(at: kernel.path, to: kbin)
+        try FileManager.default.createDirectory(atPath: path.string, withIntermediateDirectories: true)
+        let kbin = path.appending(Self.kernelBinaryFilename)
+        // `Kernel.path` is `URL` (Containerization API), so bridge across the FilePath/URL boundary.
+        try FileManager.default.copyItem(at: kernel.path, to: URL(filePath: kbin.string))
         var k = kernel
-        k.path = kbin
-        try write(path.appendingPathComponent(Self.kernelFilename), value: k)
+        k.path = URL(filePath: kbin.string)
+        try write(path.appending(Self.kernelFilename), value: k)
 
         switch initialFilesystem.type {
         case .block(let fmt, _, _):
@@ -101,7 +104,7 @@ extension Bundle {
             // when saving the Initial Filesystem to the bundle
             // discard any filesystem information and just persist
             // the block into the Bundle.
-            _ = try initialFilesystem.clone(to: path.appendingPathComponent(Self.initfsFilename).path)
+            _ = try initialFilesystem.clone(to: path.appending(Self.initfsFilename).string)
         default:
             fatalError("invalid filesystem type for initial filesystem")
         }
@@ -131,13 +134,14 @@ extension Bundle {
     }
 
     /// Return the full filepath for a named resource in the Bundle.
-    public func filePath(for name: String) -> URL {
-        path.appendingPathComponent(name)
+    public func filePath(for name: String) -> FilePath {
+        path.appending(name)
     }
 
     public func setContainerRootFs(fs: Filesystem) throws {
         let fsData = try JSONEncoder().encode(fs)
-        try fsData.write(to: self.containerRootfsConfig)
+        // Foundation's `Data.write(to:)` only accepts `URL`, so bridge here.
+        try fsData.write(to: URL(filePath: self.containerRootfsConfig.string))
     }
 
     public func cloneContainerRootFs(cloning fs: Filesystem, readonly: Bool = false) throws {
@@ -145,30 +149,32 @@ extension Bundle {
         if readonly && !mutableFs.options.contains("ro") {
             mutableFs.options.append("ro")
         }
-        let cloned = try mutableFs.clone(to: self.containerRootfsBlock.absolutePath())
+        let cloned = try mutableFs.clone(to: self.containerRootfsBlock.string)
         try setContainerRootFs(fs: cloned)
     }
 
     /// Delete the bundle and all of the resources contained inside.
     public func delete() throws {
-        try FileManager.default.removeItem(at: self.path)
+        try FileManager.default.removeItem(atPath: self.path.string)
     }
 
     public func write(filename: String, value: Encodable) throws {
-        try Self.write(self.path.appendingPathComponent(filename), value: value)
+        try Self.write(self.path.appending(filename), value: value)
     }
 
-    private static func write(_ path: URL, value: Encodable) throws {
+    private static func write(_ path: FilePath, value: Encodable) throws {
         let data = try JSONEncoder().encode(value)
-        try data.write(to: path)
+        // Foundation's `Data.write(to:)` only accepts `URL`, so bridge here.
+        try data.write(to: URL(filePath: path.string))
     }
 
     public func load<T>(filename: String) throws -> T where T: Decodable {
-        try load(path: self.path.appendingPathComponent(filename))
+        try load(path: self.path.appending(filename))
     }
 
-    private func load<T>(path: URL) throws -> T where T: Decodable {
-        let data = try Data(contentsOf: path)
+    private func load<T>(path: FilePath) throws -> T where T: Decodable {
+        // Foundation's `Data(contentsOf:)` only accepts `URL`, so bridge here.
+        let data = try Data(contentsOf: URL(filePath: path.string))
         return try JSONDecoder().decode(T.self, from: data)
     }
 }
