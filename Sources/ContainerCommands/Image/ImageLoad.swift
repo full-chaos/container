@@ -19,6 +19,7 @@ import ContainerAPIClient
 import Containerization
 import ContainerizationError
 import Foundation
+import SystemPackage
 import TerminalProgress
 
 extension Application {
@@ -31,9 +32,7 @@ extension Application {
 
         @Option(
             name: .shortAndLong, help: "Path to the image tar archive", completion: .file(),
-            transform: { str in
-                URL(fileURLWithPath: str, relativeTo: .currentDirectory()).absoluteURL.path(percentEncoded: false)
-            })
+            transform: { str in FilePath.absolute(str).string })
         var input: String?
 
         @Flag(name: .shortAndLong, help: "Load images even if the archive contains invalid files")
