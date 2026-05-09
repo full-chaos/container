@@ -17,7 +17,9 @@
 import ArgumentParser
 import ContainerAPIClient
 import ContainerizationError
+import ContainerizationOS
 import Foundation
+import SystemPackage
 import TerminalProgress
 
 extension Application {
@@ -35,9 +37,7 @@ extension Application {
 
         @Option(
             name: .shortAndLong, help: "Pathname for the saved container filesystem (defaults to stdout)", completion: .file(),
-            transform: { str in
-                URL(fileURLWithPath: str, relativeTo: .currentDirectory()).absoluteURL.path(percentEncoded: false)
-            })
+            transform: { str in FilePathOps.absolutePath(FilePath(str)).string })
         var output: String?
 
         @Argument(help: "container ID")
