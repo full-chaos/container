@@ -29,6 +29,7 @@ public struct RuntimeConfiguration: Codable, Sendable {
     public let containerConfiguration: ContainerConfiguration?
     public let containerRootFilesystem: Filesystem?
     public let options: ContainerCreateOptions?
+    public let runtimeData: Data?
 
     public init(
         path: FilePath,
@@ -36,7 +37,8 @@ public struct RuntimeConfiguration: Codable, Sendable {
         kernel: Kernel,
         containerConfiguration: ContainerConfiguration? = nil,
         containerRootFilesystem: Filesystem? = nil,
-        options: ContainerCreateOptions? = nil
+        options: ContainerCreateOptions? = nil,
+        runtimeData: Data? = nil
     ) {
         self.path = path
         self.initialFilesystem = initialFilesystem
@@ -44,6 +46,7 @@ public struct RuntimeConfiguration: Codable, Sendable {
         self.containerConfiguration = containerConfiguration
         self.containerRootFilesystem = containerRootFilesystem
         self.options = options
+        self.runtimeData = runtimeData
     }
 
     private enum CodingKeys: String, CodingKey {
