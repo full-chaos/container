@@ -199,6 +199,7 @@ let package = Package(
             name: "ContainerAPIServiceTests",
             dependencies: [
                 .product(name: "Containerization", package: "containerization"),
+                "ContainerAPIService",
                 "ContainerResource",
                 "ContainerRuntimeLinuxTypes",
                 "ContainerSandboxServiceClient",
