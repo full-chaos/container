@@ -43,7 +43,7 @@ public struct ContentServiceHarness: Sendable {
             return reply
         }
         let reply = message.reply()
-        reply.set(key: .contentPath, value: path.path(percentEncoded: false))
+        reply.set(key: .contentPath, value: path.string)
         return reply
     }
 
@@ -83,7 +83,7 @@ public struct ContentServiceHarness: Sendable {
         let id = session.id
         let dir = session.ingestDir
         let reply = message.reply()
-        reply.set(key: .directory, value: dir.path(percentEncoded: false))
+        reply.set(key: .directory, value: dir.string)
         reply.set(key: .ingestSessionId, value: id)
         return reply
     }
