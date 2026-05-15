@@ -350,6 +350,21 @@ public struct Flags {
             help: "Restart policy (no, always, on-failure[:max-retries], unless-stopped)"
         )
         public var restart: String?
+
+        public func validate() throws {
+            if dnsDisabled {
+                let hasDNSConfig =
+                    !dns.nameservers.isEmpty
+                    || dns.domain != nil
+                    || !dns.options.isEmpty
+                    || !dns.searchDomains.isEmpty
+                if hasDNSConfig {
+                    throw ValidationError(
+                        "`--no-dns` cannot be used with DNS configuration flags (`--dns`, `--dns-domain`, `--dns-option`, `--dns-search`)"
+                    )
+                }
+            }
+        }
     }
 
     public struct Progress: ParsableArguments {
