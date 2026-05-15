@@ -213,7 +213,6 @@ public struct Utility {
                 containerId: config.id,
                 builtinNetworkId: builtinNetworkId,
                 networks: parsedNetworks,
-                dnsDomain: containerSystemConfig.dns.domain,
             )
             for attachmentConfiguration in config.networks {
                 let network = try await networkClient.get(id: attachmentConfiguration.network)
@@ -227,10 +226,21 @@ public struct Utility {
             config.dns = nil
         } else {
             let domain = management.dns.domain ?? containerSystemConfig.dns.domain
+            // Auto-inject the configured DNS domain as a search-domain when
+            // the user has not specified any. This is what makes bare-name
+            // peer queries (e.g. `nslookup probe-pg`) hit the embedded DNS
+            // handler in the default configuration: glibc/musl appends the
+            // search suffix, the FQDN flows through vmnet's DNS proxy to the
+            // host system resolver, and the matching `/etc/resolver/`
+            // entry routes it to `127.0.0.1:2053`. See CHAOS-1478.
+            var searchDomains = management.dns.searchDomains
+            if searchDomains.isEmpty, let domain, !domain.isEmpty {
+                searchDomains = [domain]
+            }
             config.dns = .init(
                 nameservers: management.dns.nameservers,
                 domain: domain,
-                searchDomains: management.dns.searchDomains,
+                searchDomains: searchDomains,
                 options: management.dns.options
             )
         }
@@ -274,7 +284,6 @@ public struct Utility {
         containerId: String,
         builtinNetworkId: String?,
         networks: [Parser.ParsedNetwork],
-        dnsDomain: String?,
     ) throws -> [AttachmentConfiguration] {
         // Validate MAC addresses if provided
         for network in networks {
@@ -283,19 +292,10 @@ public struct Utility {
             }
         }
 
-        // make an FQDN for the first interface
-        let fqdn: String?
-        if !containerId.contains(".") {
-            // add default domain if it exists, and container ID is unqualified
-            if let dnsDomain {
-                fqdn = "\(containerId).\(dnsDomain)."
-            } else {
-                fqdn = nil
-            }
-        } else {
-            // use container ID directly if fully qualified
-            fqdn = "\(containerId)."
-        }
+        // CHAOS-1478: Always register the bare containerId form.
+        // Trailing dots are stripped defensively; dns.domain suffix is no longer
+        // baked into the registration key — ContainerDNSHandler strips it at query time.
+        let registrationHostname = containerId.hasSuffix(".") ? String(containerId.dropLast()) : containerId
 
         guard networks.isEmpty else {
             // Check if this is only the default network with properties (e.g., MAC address)
@@ -308,19 +308,14 @@ public struct Utility {
                 }
             }
 
-            // attach the first network using the fqdn, and the rest using just the container ID
+            // Register the bare-form hostname on every network attachment; allocator-side
+            // normalization makes trailing-dot input irrelevant. See CHAOS-1478.
             return try networks.enumerated().map { item in
                 let macAddress = try item.element.macAddress.map { try MACAddress($0) }
                 let mtu = item.element.mtu ?? 1280
-                guard item.offset == 0 else {
-                    return AttachmentConfiguration(
-                        network: item.element.name,
-                        options: AttachmentOptions(hostname: containerId, macAddress: macAddress, mtu: mtu)
-                    )
-                }
                 return AttachmentConfiguration(
                     network: item.element.name,
-                    options: AttachmentOptions(hostname: fqdn ?? containerId, macAddress: macAddress, mtu: mtu)
+                    options: AttachmentOptions(hostname: registrationHostname, macAddress: macAddress, mtu: mtu)
                 )
             }
         }
@@ -329,7 +324,7 @@ public struct Utility {
         guard let builtinNetworkId else {
             throw ContainerizationError(.invalidState, message: "builtin network is not present")
         }
-        return [AttachmentConfiguration(network: builtinNetworkId, options: AttachmentOptions(hostname: fqdn ?? containerId, macAddress: nil, mtu: 1280))]
+        return [AttachmentConfiguration(network: builtinNetworkId, options: AttachmentOptions(hostname: registrationHostname, macAddress: nil, mtu: 1280))]
     }
 
     private static func getKernel(management: Flags.Management) async throws -> Kernel {

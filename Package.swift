@@ -159,6 +159,7 @@ let package = Package(
                 .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SystemPackage", package: "swift-system"),
+                "APIServerCore",
                 "ContainerAPIService",
                 "ContainerAPIClient",
                 "ContainerLog",
@@ -172,6 +173,22 @@ let package = Package(
                 "DNSServer",
             ],
             path: "Sources/APIServer"
+        ),
+        // APIServerCore: pure-logic helpers extracted from the container-apiserver
+        // executable so that unit tests can reach them without importing @main. CHAOS-1478.
+        .target(
+            name: "APIServerCore",
+            dependencies: [
+                "ContainerAPIService",
+                "DNSServer",
+            ],
+            path: "Sources/APIServerCore"
+        ),
+        .testTarget(
+            name: "APIServerTests",
+            dependencies: [
+                "APIServerCore"
+            ]
         ),
         .target(
             name: "ContainerAPIService",
@@ -199,6 +216,7 @@ let package = Package(
             name: "ContainerAPIServiceTests",
             dependencies: [
                 .product(name: "Containerization", package: "containerization"),
+                "ContainerAPIClient",
                 "ContainerResource",
                 "ContainerRuntimeLinuxTypes",
                 "ContainerSandboxServiceClient",
@@ -430,6 +448,7 @@ let package = Package(
                 .product(name: "ContainerizationExtras", package: "containerization"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SystemPackage", package: "swift-system"),
+                .product(name: "TOML", package: "swift-toml"),
                 "ContainerPersistence",
                 "ContainerTestSupport",
             ]

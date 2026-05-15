@@ -14,6 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
+import APIServerCore
 import ContainerAPIService
 import ContainerizationExtras
 import DNSServer
@@ -21,10 +22,12 @@ import DNSServer
 /// Handler that uses table lookup to resolve hostnames.
 struct ContainerDNSHandler: DNSHandler {
     private let networkService: NetworksService
+    private let dnsDomain: String?
     private let ttl: UInt32
 
-    public init(networkService: NetworksService, ttl: UInt32 = 5) {
+    public init(networkService: NetworksService, dnsDomain: String? = nil, ttl: UInt32 = 5) {
         self.networkService = networkService
+        self.dnsDomain = dnsDomain
         self.ttl = ttl
     }
 
@@ -76,7 +79,8 @@ struct ContainerDNSHandler: DNSHandler {
     }
 
     private func answerHost(question: Question) async throws -> ResourceRecord? {
-        guard let ipAllocation = try await networkService.lookup(hostname: question.name) else {
+        let key = DNSRegistrationKey.registrationKey(for: question.name, dnsDomain: dnsDomain)
+        guard let ipAllocation = try await networkService.lookup(hostname: key) else {
             return nil
         }
         let ipv4 = ipAllocation.ipv4Address.address.description
@@ -88,7 +92,8 @@ struct ContainerDNSHandler: DNSHandler {
     }
 
     private func answerHost6(question: Question) async throws -> (record: ResourceRecord?, hostnameExists: Bool) {
-        guard let ipAllocation = try await networkService.lookup(hostname: question.name) else {
+        let key = DNSRegistrationKey.registrationKey(for: question.name, dnsDomain: dnsDomain)
+        guard let ipAllocation = try await networkService.lookup(hostname: key) else {
             return (nil, false)
         }
         guard let ipv6Address = ipAllocation.ipv6Address else {
