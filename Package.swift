@@ -141,6 +141,7 @@ let package = Package(
         .testTarget(
             name: "ContainerCommandsTests",
             dependencies: [
+                .product(name: "SystemPackage", package: "swift-system"),
                 "ContainerCommands",
                 "ContainerResource",
             ]

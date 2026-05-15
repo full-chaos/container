@@ -23,6 +23,7 @@ import Containerization
 import ContainerizationError
 import ContainerizationOCI
 import Foundation
+import SystemPackage
 import TerminalProgress
 
 extension Application {
@@ -46,9 +47,7 @@ extension Application {
 
         @Option(
             name: .shortAndLong, help: "Pathname for the saved image", completion: .file(),
-            transform: { str in
-                URL(fileURLWithPath: str, relativeTo: .currentDirectory()).absoluteURL.path(percentEncoded: false)
-            })
+            transform: { str in FilePath.absolute(str).string })
         var output: String?
 
         @Option(
