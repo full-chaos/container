@@ -118,7 +118,7 @@ public actor ContainersService {
                             ]
                         )
 
-                        let bundle = ContainerResource.Bundle(path: dir)
+                        let bundle = ContainerResource.Bundle(path: FilePath(dir.path))
                         try? bundle.delete()
                         continue
                     }
@@ -750,10 +750,10 @@ public actor ContainersService {
         do {
             _ = try _getContainerState(id: id)
             let path = self.containerRoot.appendingPathComponent(id)
-            let bundle = ContainerResource.Bundle(path: path)
+            let bundle = ContainerResource.Bundle(path: FilePath(path.path))
             return [
-                try FileHandle(forReadingFrom: bundle.containerLog),
-                try FileHandle(forReadingFrom: bundle.bootlog),
+                try FileHandle(forReadingFrom: URL(filePath: bundle.containerLog.string)),
+                try FileHandle(forReadingFrom: URL(filePath: bundle.bootlog.string)),
             ]
         } catch {
             throw ContainerizationError(
@@ -883,9 +883,9 @@ public actor ContainersService {
         }
 
         let path = self.containerRoot.appendingPathComponent(id)
-        let bundle = ContainerResource.Bundle(path: path)
+        let bundle = ContainerResource.Bundle(path: FilePath(path.path))
         let rootfs = bundle.containerRootfsBlock
-        try EXT4.EXT4Reader(blockDevice: FilePath(rootfs)).export(archive: FilePath(archive))
+        try EXT4.EXT4Reader(blockDevice: rootfs).export(archive: FilePath(archive))
     }
 
     private func handleContainerExit(id: String, code: ExitStatus? = nil) async throws {
@@ -921,7 +921,7 @@ public actor ContainersService {
         self.log.info("shutting down sandbox service", metadata: ["id": "\(id)"])
 
         let path = self.containerRoot.appendingPathComponent(id)
-        let bundle = ContainerResource.Bundle(path: path)
+        let bundle = ContainerResource.Bundle(path: FilePath(path.path))
         let config = try bundle.configuration
         let label = Self.fullLaunchdServiceLabel(
             runtimeName: config.runtimeHandler,
@@ -1006,7 +1006,7 @@ public actor ContainersService {
         // Try to get config for service deregistration
         // Don't fail if bundle is incomplete
         var config: ContainerConfiguration?
-        let bundle = ContainerResource.Bundle(path: path)
+        let bundle = ContainerResource.Bundle(path: FilePath(path.path))
         do {
             config = try bundle.configuration
         } catch {
@@ -1050,7 +1050,7 @@ public actor ContainersService {
 
     private func getContainerCreationOptions(id: String) throws -> ContainerCreateOptions {
         let path = self.containerRoot.appendingPathComponent(id)
-        let bundle = ContainerResource.Bundle(path: path)
+        let bundle = ContainerResource.Bundle(path: FilePath(path.path))
         let options: ContainerCreateOptions = try bundle.load(filename: "options.json")
         return options
     }
@@ -1109,7 +1109,7 @@ public actor ContainersService {
 
     /// Get container configuration, either from existing bundle or from RuntimeConfiguration
     private static func getContainerConfiguration(at path: URL) throws -> (ContainerConfiguration, ContainerCreateOptions?) {
-        let bundle = ContainerResource.Bundle(path: path)
+        let bundle = ContainerResource.Bundle(path: FilePath(path.path))
         do {
             let config = try bundle.configuration
             let options: ContainerCreateOptions? = try? bundle.load(filename: "options.json")
