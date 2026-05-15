@@ -376,7 +376,7 @@ public actor ContainersService {
                         "initfs": "\(initImage ?? self.containerSystemConfig.vminit.image)",
                     ])
                 let runtimeConfig = RuntimeConfiguration(
-                    path: path,
+                    path: FilePath(path.path(percentEncoded: false)),
                     initialFilesystem: initFilesystem,
                     kernel: kernel,
                     containerConfiguration: configuration,
@@ -1117,7 +1117,7 @@ public actor ContainersService {
         } catch {
             // Bundle doesn't exist or incomplete, try runtime configuration
             // This handles containers that were created but not started yet
-            let runtimeConfig = try RuntimeConfiguration.readRuntimeConfiguration(from: path)
+            let runtimeConfig = try RuntimeConfiguration.readRuntimeConfiguration(from: FilePath(path.path(percentEncoded: false)))
             guard let config = runtimeConfig.containerConfiguration else {
                 throw ContainerizationError(.internalError, message: "runtime configuration missing container configuration")
             }
