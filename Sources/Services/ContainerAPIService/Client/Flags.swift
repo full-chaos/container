@@ -15,8 +15,11 @@
 //===----------------------------------------------------------------------===//
 
 import ArgumentParser
+import ContainerResource
 import ContainerizationError
 import Foundation
+
+extension RestartPolicy: ExpressibleByArgument {}
 
 public struct Flags {
     public struct Logging: ParsableArguments {
@@ -347,9 +350,9 @@ public struct Flags {
 
         @Option(
             name: .customLong("restart"),
-            help: "Restart policy (no, always, on-failure[:max-retries], unless-stopped)"
+            help: "Restart policy when the container exits (no, onFailure, always)"
         )
-        public var restart: String?
+        public var restart: RestartPolicy = .no
 
         public func validate() throws {
             if dnsDisabled {
