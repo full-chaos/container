@@ -14,31 +14,21 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 /// Declarative restart policy that the daemon stores on a created container.
 ///
-/// At present this is a data-shape only contract: the policy is recorded in
-/// ``ContainerCreateOptions/restartPolicy`` and surfaced back via the
-/// container snapshot, but the daemon does not yet observe container exits
-/// and re-launch per policy. Wiring an actual restart manager is a follow-up.
-public struct RestartPolicy: Codable, Sendable, Equatable {
-    public enum Mode: String, Codable, Sendable, Equatable {
-        case no
-        case always
-        case onFailure = "on-failure"
-        case unlessStopped = "unless-stopped"
-    }
-
-    public let mode: Mode
-    /// Maximum number of restart attempts when ``mode`` is ``Mode/onFailure``.
-    /// Ignored for other modes. `0` means "unbounded retries".
-    public let maxRetries: Int
-
-    public static let none = RestartPolicy(mode: .no, maxRetries: 0)
-
-    public init(mode: Mode, maxRetries: Int = 0) {
-        self.mode = mode
-        self.maxRetries = maxRetries
-    }
+/// The shape mirrors the in-flight upstream proposal in
+/// [apple/container#1258](https://github.com/apple/container/pull/1258):
+/// a bare `String`-backed enum with the conservative initial set
+/// (`no`, `onFailure`, `always`). Bounded `on-failure:N` retries and
+/// `unless-stopped` are intentionally deferred — they ship as separate
+/// follow-ups once #1258 lands.
+///
+/// At present this is a data-shape only contract on the fork: the policy is
+/// recorded in ``ContainerCreateOptions/restartPolicy`` but the daemon does
+/// not yet observe container exits and re-launch per policy. Enforcement
+/// will arrive via the upstream restart manager (#1258).
+public enum RestartPolicy: String, Sendable, Codable, Equatable, CaseIterable {
+    case no
+    case onFailure
+    case always
 }

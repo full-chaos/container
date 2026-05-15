@@ -22,14 +22,18 @@ public struct ContainerCreateOptions: Codable, Sendable {
     /// Declarative restart policy recorded at creation time.
     ///
     /// Today this is data-shape only — the daemon stores the policy but does
-    /// not observe exits and re-launch automatically. A restart-manager
-    /// follow-up will honor this field at runtime.
-    public let restartPolicy: RestartPolicy?
+    /// not observe exits and re-launch automatically. Enforcement is tracked
+    /// by upstream [apple/container#1258](https://github.com/apple/container/pull/1258).
+    ///
+    /// Defaults to ``RestartPolicy/no``. Decoded with `decodeIfPresent` so
+    /// older `options.json` blobs written before the field existed continue to
+    /// load (forward-compatible additive change).
+    public let restartPolicy: RestartPolicy
 
     public init(
         autoRemove: Bool,
         rootFsOverride: Filesystem? = nil,
-        restartPolicy: RestartPolicy? = nil
+        restartPolicy: RestartPolicy = .no
     ) {
         self.autoRemove = autoRemove
         self.rootFsOverride = rootFsOverride
@@ -38,4 +42,16 @@ public struct ContainerCreateOptions: Codable, Sendable {
 
     public static let `default` = ContainerCreateOptions(autoRemove: false)
 
+    enum CodingKeys: String, CodingKey {
+        case autoRemove
+        case rootFsOverride
+        case restartPolicy
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.autoRemove = try container.decode(Bool.self, forKey: .autoRemove)
+        self.rootFsOverride = try container.decodeIfPresent(Filesystem.self, forKey: .rootFsOverride)
+        self.restartPolicy = try container.decodeIfPresent(RestartPolicy.self, forKey: .restartPolicy) ?? .no
+    }
 }
