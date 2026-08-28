@@ -20,6 +20,7 @@ import ContainerizationError
 import Foundation
 import ContainerizationOCI
 import ContainerXPC
+import SystemPackage
 
 public struct RemoteContentStoreClient: ContentStore {
     private static let serviceIdentifier = "com.apple.container.core.container-core-images"
@@ -31,7 +32,7 @@ public struct RemoteContentStoreClient: ContentStore {
 
     public init() {}
 
-    private func _get(digest: String) async throws -> URL? {
+    private func _get(digest: String) async throws -> FilePath? {
         let client = Self.newClient()
         let request = XPCMessage(route: .contentGet)
         request.set(key: .digest, value: digest)
@@ -40,7 +41,7 @@ public struct RemoteContentStoreClient: ContentStore {
             guard let path = response.string(key: .contentPath) else {
                 return nil
             }
-            return URL(filePath: path)
+            return FilePath(path)
         } catch let error as ContainerizationError {
             if error.code == .notFound {
                 return nil
@@ -50,10 +51,11 @@ public struct RemoteContentStoreClient: ContentStore {
     }
 
     public func get(digest: String) async throws -> Content? {
-        guard let url = try await self._get(digest: digest) else {
+        guard let path = try await self._get(digest: digest) else {
             return nil
         }
-        return try LocalContent(path: url)
+        // LocalContent is defined upstream in Containerization and only accepts URL.
+        return try LocalContent(path: URL(filePath: path.string))
     }
 
     public func get<T: Decodable>(digest: String) async throws -> T? {
