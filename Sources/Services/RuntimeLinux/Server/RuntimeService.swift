@@ -1648,9 +1648,10 @@ extension RuntimeService {
     /// Create bundle from RuntimeConfiguration
     private func createBundle() throws {
         do {
-            let runtimeConfig = try RuntimeConfiguration.readRuntimeConfiguration(from: self.root)
+            let runtimeConfig = try RuntimeConfiguration.readRuntimeConfiguration(
+                from: FilePath(self.root.path(percentEncoded: false)))
             _ = try ContainerResource.Bundle.create(
-                path: runtimeConfig.path,
+                path: URL(fileURLWithPath: runtimeConfig.path.string),
                 initialFilesystem: runtimeConfig.initialFilesystem,
                 kernel: runtimeConfig.kernel,
                 containerConfiguration: runtimeConfig.containerConfiguration,
