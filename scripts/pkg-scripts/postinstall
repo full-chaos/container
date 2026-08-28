@@ -1,0 +1,78 @@
+#!/bin/bash
+# Copyright © 2025-2026 Apple Inc. and the container project authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Postinstall hook for the container .pkg installer (CHAOS-1478 routing fix).
+#
+# The embedded DNS handler in `container-apiserver` listens on `127.0.0.1:2053`
+# but containers query DNS at `192.168.64.1:53` (the vmnet bridge gateway).
+# Apple's vmnet framework intercepts `:53` on the bridge gateway and forwards
+# unmatched queries to the macOS system resolver, which by default does not
+# know about peer container hostnames.
+#
+# Binding the embedded handler directly on the bridge gateway is not possible:
+# port 53 is privileged and the daemon runs as the invoking user (uid != 0).
+# Routing the queries via `/etc/resolver/<domain>` is the supported macOS path.
+# The resolver file must be installed by a privileged context, so we drop it
+# here at install time (the .pkg installer already runs with administrator
+# privileges that the user has accepted).
+#
+# This is the matching server-side configuration for the default `dns.domain`
+# value baked into `ContainerSystemConfig.DNSConfig.defaultDomain`. Containers
+# get `search test` injected automatically (see Utility.swift), so a bare-name
+# query like `nslookup probe-pg` resolves through the chain:
+#
+#   VM glibc/musl   :  appends ".test" via search domain
+#   vmnet :53 proxy :  forwards "probe-pg.test" to macOS system resolver
+#   macOS resolver  :  matches /etc/resolver/containerization.test ->
+#                      127.0.0.1 port 2053
+#   apiserver :2053 :  strips ".test" suffix, looks up "probe-pg",
+#                      returns 192.168.64.x
+#
+# The matching `containerizationPrefix` and resolver-file format come from
+# `Sources/Services/ContainerAPIService/Client/HostDNSResolver.swift`.
+
+set -euo pipefail
+
+# Default DNS suffix for container peer-name resolution.
+# MUST stay in sync with `ContainerSystemConfig.DNSConfig.defaultDomain`.
+readonly DOMAIN="test"
+
+# `/etc/resolver/` filename convention from `HostDNSResolver.containerizationPrefix`.
+readonly RESOLVER_DIR="/etc/resolver"
+readonly RESOLVER_FILE="${RESOLVER_DIR}/containerization.${DOMAIN}"
+
+# Embedded handler bind from `APIServer+Start.swift` (`Self.dnsPort`).
+readonly DNS_PORT=2053
+
+mkdir -p "${RESOLVER_DIR}"
+
+# Idempotent: overwrite to ensure the file matches the current expected
+# contents even after a partial / older install.
+cat >"${RESOLVER_FILE}" <<EOF
+domain ${DOMAIN}
+search ${DOMAIN}
+nameserver 127.0.0.1
+port ${DNS_PORT}
+EOF
+chmod 0644 "${RESOLVER_FILE}"
+
+# Refresh mDNSResponder so it picks up the new resolver entry without a reboot.
+# Best-effort: failure here is not fatal — the resolver file alone is enough
+# once the system reloads naturally.
+if pgrep -q mDNSResponder; then
+    killall -HUP mDNSResponder 2>/dev/null || true
+fi
+
+exit 0
