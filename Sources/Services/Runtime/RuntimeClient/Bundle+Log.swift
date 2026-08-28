@@ -16,10 +16,11 @@
 
 import ContainerResource
 import Foundation
+import SystemPackage
 
 extension ContainerResource.Bundle {
     /// The pathname for the workload log file.
-    public var containerLog: URL {
-        path.appendingPathComponent("stdio.log")
+    public var containerLog: FilePath {
+        path.appending("stdio.log")
     }
 }

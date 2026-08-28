@@ -154,7 +154,7 @@ public actor RuntimeService {
 
             let dynamicEnv = try message.dynamicEnv()
 
-            let bundle = ContainerResource.Bundle(path: self.root)
+            let bundle = ContainerResource.Bundle(path: FilePath(self.root.path))
             try bundle.createLogFile()
 
             var config = try bundle.configuration
@@ -239,7 +239,7 @@ public actor RuntimeService {
             }
 
             let stdio = message.stdio()
-            let containerLog = try FileHandle(forWritingTo: bundle.containerLog)
+            let containerLog = try FileHandle(forWritingTo: URL(filePath: bundle.containerLog.string))
             let stdout = {
                 if let h = stdio[1] {
                     return MultiWriter(handles: [h, containerLog])
@@ -281,7 +281,7 @@ public actor RuntimeService {
                         ))
                 }
                 czConfig.hosts = Hosts(entries: hostsEntries)
-                czConfig.bootLog = BootLog.file(path: bundle.bootlog, append: true)
+                czConfig.bootLog = BootLog.file(path: URL(filePath: bundle.bootlog.string), append: true)
             }
 
             let ctrInfo = ContainerInfo(
@@ -1417,7 +1417,7 @@ extension ContainerResource.Bundle {
     func createLogFile() throws {
         // Create the log file we'll write stdio to.
         // O_TRUNC resolves a log delay issue on restarted containers by force-updating internal state
-        let fd = Darwin.open(self.containerLog.path, O_CREAT | O_RDONLY | O_TRUNC, 0o644)
+        let fd = Darwin.open(self.containerLog.string, O_CREAT | O_RDONLY | O_TRUNC, 0o644)
         guard fd > 0 else {
             throw POSIXError(.init(rawValue: errno)!)
         }
@@ -1636,7 +1636,7 @@ extension RuntimeService {
             return false
         }
 
-        let bundle = ContainerResource.Bundle(path: path)
+        let bundle = ContainerResource.Bundle(path: FilePath(path.path))
         do {
             _ = try bundle.configuration
             return true
@@ -1650,7 +1650,7 @@ extension RuntimeService {
         do {
             let runtimeConfig = try RuntimeConfiguration.readRuntimeConfiguration(from: self.root)
             _ = try ContainerResource.Bundle.create(
-                path: runtimeConfig.path,
+                path: FilePath(runtimeConfig.path.path),
                 initialFilesystem: runtimeConfig.initialFilesystem,
                 kernel: runtimeConfig.kernel,
                 containerConfiguration: runtimeConfig.containerConfiguration,
