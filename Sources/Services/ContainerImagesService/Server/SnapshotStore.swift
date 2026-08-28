@@ -21,9 +21,9 @@ import ContainerizationEXT4
 import ContainerizationError
 import ContainerizationExtras
 import ContainerizationOCI
-import ContainerizationOS
 import Foundation
 import Logging
+import SystemPackage
 import TerminalProgress
 
 public actor SnapshotStore {
@@ -50,20 +50,20 @@ public actor SnapshotStore {
         }
     }
 
-    let path: URL
+    let path: FilePath
     let fm = FileManager.default
-    let ingestDir: URL
+    let ingestDir: FilePath
     let unpackStrategy: UnpackStrategy
     let log: Logger?
 
-    public init(path: URL, unpackStrategy: @escaping UnpackStrategy, log: Logger?) throws {
-        let root = path.appendingPathComponent("snapshots")
+    public init(path: FilePath, unpackStrategy: @escaping UnpackStrategy, log: Logger?) throws {
+        let root = path.appending("snapshots")
         self.path = root
-        self.ingestDir = self.path.appendingPathComponent(Self.ingestDirName)
+        self.ingestDir = self.path.appending(Self.ingestDirName)
         self.unpackStrategy = unpackStrategy
         self.log = log
-        try self.fm.createDirectory(at: root, withIntermediateDirectories: true)
-        try self.fm.createDirectory(at: self.ingestDir, withIntermediateDirectories: true)
+        try self.fm.createDirectory(atPath: root.string, withIntermediateDirectories: true, attributes: nil)
+        try self.fm.createDirectory(atPath: self.ingestDir.string, withIntermediateDirectories: true, attributes: nil)
     }
 
     public func unpack(image: Containerization.Image, platform: Platform? = nil, progressUpdate: ProgressUpdateHandler?) async throws {
@@ -81,7 +81,7 @@ public actor SnapshotStore {
         for desc in toUnpack {
             try Task.checkCancellation()
             let snapshotDir = self.snapshotDir(desc)
-            guard !self.fm.fileExists(atPath: snapshotDir.absolutePath()) else {
+            guard !self.fm.fileExists(atPath: snapshotDir.string) else {
                 // We have already unpacked this image + platform. Skip
                 continue
             }
@@ -103,30 +103,30 @@ public actor SnapshotStore {
 
             let tempDir = try self.tempUnpackDir()
 
-            let tempSnapshotPath = tempDir.appendingPathComponent(Self.snapshotFileName, isDirectory: false)
-            let infoPath = tempDir.appendingPathComponent(Self.snapshotInfoFileName, isDirectory: false)
+            let tempSnapshotPath = URL(fileURLWithPath: tempDir.appending(Self.snapshotFileName).string, isDirectory: false)
+            let infoPath = tempDir.appending(Self.snapshotInfoFileName)
             do {
                 let progress = ContainerizationProgressAdapter.handler(from: taskUpdateProgress)
                 let mount = try await unpacker.unpack(image, for: platform, at: tempSnapshotPath, progress: progress)
                 let fs = Filesystem.block(
                     format: mount.type,
-                    source: self.snapshotPath(desc).absolutePath(),
+                    source: self.snapshotPath(desc).string,
                     destination: mount.destination,
                     options: mount.options
                 )
                 let snapshotInfo = try JSONEncoder().encode(fs)
-                self.fm.createFile(atPath: infoPath.absolutePath(), contents: snapshotInfo)
+                self.fm.createFile(atPath: infoPath.string, contents: snapshotInfo)
             } catch {
-                try? self.fm.removeItem(at: tempDir)
+                try? self.fm.removeItem(atPath: tempDir.string)
                 throw error
             }
             do {
-                try fm.moveItem(at: tempDir, to: snapshotDir)
+                try fm.moveItem(atPath: tempDir.string, toPath: snapshotDir.string)
             } catch let err as NSError {
                 guard err.code == NSFileWriteFileExistsError else {
                     throw err
                 }
-                try? self.fm.removeItem(at: tempDir)
+                try? self.fm.removeItem(atPath: tempDir.string)
             }
         }
         await taskManager.finish()
@@ -142,10 +142,10 @@ public actor SnapshotStore {
         }
         for desc in toDelete {
             let p = self.snapshotDir(desc)
-            guard self.fm.fileExists(atPath: p.absolutePath()) else {
+            guard self.fm.fileExists(atPath: p.string) else {
                 continue
             }
-            try self.fm.removeItem(at: p)
+            try self.fm.removeItem(atPath: p.string)
         }
     }
 
@@ -154,13 +154,13 @@ public actor SnapshotStore {
         let infoPath = snapshotInfoPath(desc)
         let fsPath = snapshotPath(desc)
 
-        guard self.fm.fileExists(atPath: infoPath.absolutePath()),
-            self.fm.fileExists(atPath: fsPath.absolutePath())
+        guard self.fm.fileExists(atPath: infoPath.string),
+            self.fm.fileExists(atPath: fsPath.string)
         else {
             throw ContainerizationError(.notFound, message: "image snapshot for \(image.reference) with platform \(platform.description)")
         }
         let decoder = JSONDecoder()
-        let data = try Data(contentsOf: infoPath)
+        let data = try Data(contentsOf: URL(filePath: infoPath.string))
         let fs = try decoder.decode(Filesystem.self, from: data)
         return fs
     }
@@ -176,52 +176,45 @@ public actor SnapshotStore {
                 toKeep.append(desc.digest.trimmingDigestPrefix)
             }
         }
-        let all = try self.fm.contentsOfDirectory(at: self.path, includingPropertiesForKeys: [.totalFileAllocatedSizeKey]).map {
-            $0.lastPathComponent
-        }
+        let all = try self.fm.contentsOfDirectory(atPath: self.path.string)
         let delete = Set(all).subtracting(Set(toKeep))
         var deletedBytes: UInt64 = 0
         for dir in delete {
-            let unpackedPath = self.path.appending(path: dir, directoryHint: .isDirectory)
-            guard self.fm.fileExists(atPath: unpackedPath.absolutePath()) else {
+            let unpackedPath = self.path.appending(dir)
+            guard self.fm.fileExists(atPath: unpackedPath.string) else {
                 continue
             }
-            deletedBytes += self.fm.allocatedSize(of: unpackedPath)
-            try self.fm.removeItem(at: unpackedPath)
+            deletedBytes += self.fm.allocatedSize(of: URL(fileURLWithPath: unpackedPath.string, isDirectory: true))
+            try self.fm.removeItem(atPath: unpackedPath.string)
         }
         return deletedBytes
     }
 
-    private func snapshotDir(_ desc: Descriptor) -> URL {
-        let p = self.path.appendingPathComponent(desc.digest.trimmingDigestPrefix, isDirectory: true)
-        return p
+    private func snapshotDir(_ desc: Descriptor) -> FilePath {
+        self.path.appending(desc.digest.trimmingDigestPrefix)
     }
 
-    private func snapshotPath(_ desc: Descriptor) -> URL {
-        let p = self.snapshotDir(desc)
-            .appendingPathComponent(Self.snapshotFileName, isDirectory: false)
-        return p
+    private func snapshotPath(_ desc: Descriptor) -> FilePath {
+        self.snapshotDir(desc).appending(Self.snapshotFileName)
     }
 
-    private func snapshotInfoPath(_ desc: Descriptor) -> URL {
-        let p = self.snapshotDir(desc)
-            .appendingPathComponent(Self.snapshotInfoFileName, isDirectory: false)
-        return p
+    private func snapshotInfoPath(_ desc: Descriptor) -> FilePath {
+        self.snapshotDir(desc).appending(Self.snapshotInfoFileName)
     }
 
-    private func tempUnpackDir() throws -> URL {
-        let uniqueDirectoryURL = ingestDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try self.fm.createDirectory(at: uniqueDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        return uniqueDirectoryURL
+    private func tempUnpackDir() throws -> FilePath {
+        let uniqueDir = ingestDir.appending(UUID().uuidString)
+        try self.fm.createDirectory(atPath: uniqueDir.string, withIntermediateDirectories: true, attributes: nil)
+        return uniqueDir
     }
 
     /// Get the disk size for a specific snapshot descriptor
     public func getSnapshotSize(descriptor: Descriptor) -> UInt64 {
         let snapshotPath = self.snapshotDir(descriptor)
-        guard self.fm.fileExists(atPath: snapshotPath.path) else {
+        guard self.fm.fileExists(atPath: snapshotPath.string) else {
             return 0
         }
-        return self.fm.allocatedSize(of: snapshotPath)
+        return self.fm.allocatedSize(of: URL(fileURLWithPath: snapshotPath.string, isDirectory: true))
     }
 
     /// Returns (trimmed digest, size) pairs for every unpackable snapshot owned by the image.
@@ -237,7 +230,7 @@ public actor SnapshotStore {
 
     /// Total allocated bytes across all snapshot storage (including orphans).
     public func totalAllocatedSize() -> UInt64 {
-        self.fm.allocatedSize(of: self.path)
+        self.fm.allocatedSize(of: URL(fileURLWithPath: self.path.string, isDirectory: true))
     }
 }
 
